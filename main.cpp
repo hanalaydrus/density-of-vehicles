@@ -30,7 +30,7 @@ Mat dst, detected_edges, morph_closing, flood_fill;
 
 int edgeThresh = 1;
 int lowThreshold;
-int const max_lowThreshold = 100;
+int const max_lowThreshold = 50;
 int ratio = 3;
 int kernel_size = 3;
 
@@ -45,7 +45,7 @@ void CannyThreshold(int, void*)
 	blur(src_gray, detected_edges, Size(3, 3));
 
 	/// Canny detector
-	Canny(detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size);
+	Canny(detected_edges, detected_edges, 30, 50, kernel_size);
 
 	/// Using Canny's output as a mask, we display our result
 	dst = Scalar::all(0);
@@ -181,13 +181,13 @@ int main(int _argc, char** _argv)
 		dst.create(src.size(), src.type());
 
 		/// Convert the image to grayscale
-		cvtColor(src, src_gray, CV_RGB2GRAY);
+		cvtColor(src, src_gray, CV_BGR2GRAY);
 
 		/// Create a window
 		namedWindow("Detected Edges", WINDOW_NORMAL);
 
 		/// Create a Trackbar for user to enter threshold
-		createTrackbar("Min Threshold:", "Detected Edges", &lowThreshold, max_lowThreshold, CannyThreshold);
+		// createTrackbar("Min Threshold:", "Detected Edges", &lowThreshold, max_lowThreshold, CannyThreshold);
 
 		/// Run Canny
 		CannyThreshold(0,0);
@@ -200,7 +200,7 @@ int main(int _argc, char** _argv)
 
 		// View
 		namedWindow("Input", WINDOW_NORMAL);
-		imshow("Input", inputImg);
+		imshow("Input", src_gray);
 
 		namedWindow("Output", WINDOW_NORMAL);
 		imshow("Output", outputImg);
