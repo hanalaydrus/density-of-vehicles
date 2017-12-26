@@ -154,12 +154,11 @@ void ShiTomasiCorner()
 	Scalar color = Scalar(255, 0, 0);
 
 	src_gray.copyTo(shi_tomasi);
+	src_gray.copyTo(prevImg);
 
 	prevFrameNum = frameNum;
 
 	goodFeaturesToTrack(shi_tomasi, prevPts, 40, qualityThreshold, minDist, Mat(), blockSize, useHarrisDetector, k);
-
-	cout << "prevpts size " << prevPts.size() << endl;
 
 	// for(size_t i = 0; i < prevPts.size(); i++)
 	// {
@@ -175,7 +174,7 @@ void LucasKanade()
 	vector<uchar> status;
 	vector<float> err;
 	double distance;
-	int duration;
+	float duration;
 	float oneSpeed, totalSpeed;
 	TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
 
@@ -183,30 +182,34 @@ void LucasKanade()
 	if (!prevImg.empty() && !nextImg.empty() && !prevPts.empty()) 
 	{
 		calcOpticalFlowPyrLK(prevImg, nextImg, prevPts, nextPts, status, err, Size(11,22), 3, termcrit, 0, 0.001);
+		
+		// Count Average Speed
+		nextFrameNum = frameNum;
+		duration = ((float)(nextFrameNum - prevFrameNum)/(float)fps);
+		// cout << "Duration : " << nextFrameNum << "-"<< prevFrameNum << "/" << fps << endl;
+		// cout << "Duration : " << duration << endl;
+		
+		for (size_t i = 0; i < nextPts.size(); i++)
+		{
+			distance = (norm(nextPts[i]-prevPts[i])/20);
+			// cout << "Distance : " << distance << endl;
+			oneSpeed = ((float)distance/duration);
+			// cout << "OneSpeed : " << oneSpeed << endl;
+			totalSpeed += oneSpeed;
+		}
+		speed = (totalSpeed/(float)nextPts.size());
+		cout << "Speed : " << speed << endl  << endl;
+		
+		RNG rng(12345);
+		for(size_t i = 0; i < prevPts.size(); i++)
+		{
+			Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+			circle(src, prevPts[i], 8, color, 2, 8, 0);
+			circle(src, nextPts[i], 8, color, 2, 8, 0);
+		}
+		namedWindow("Lucas Kanade", WINDOW_NORMAL);
+		imshow("Lucas Kanade", src);
 	}
-
-	// for (size_t i = 0; i < err.size(); i++)
-	// {
-	// 	cout << "Error :" << err[i] << endl;
-	// }
-	// Count Average Speed
-	nextFrameNum = frameNum;
-	duration = (nextFrameNum - prevFrameNum)*fps;
-
-	for (size_t i = 0; i < nextPts.size(); i++)
-	{
-		distance = norm(nextPts[i]-prevPts[i])/20;
-		oneSpeed = distance/duration;
-		totalSpeed += oneSpeed;
-	}
-	speed = totalSpeed/nextPts.size();
-	cout << "Duration : " << duration << endl;
-	cout << "Speed : " << speed << endl;
-	
-	// For next detection
-	src_gray.copyTo(prevImg);
-	prevFrameNum = frameNum;
-	prevPts = nextPts;
 }
 
 int main(int _argc, char** _argv)
@@ -319,16 +322,11 @@ int main(int _argc, char** _argv)
 		// Calculate density
 		CalculateDensity();
 
-		// Shi Tomasi Corner Detection
-		if (frameNum == 1) {
-			ShiTomasiCorner();
-			src_gray.copyTo(prevImg);
-		}
-
 		// Lucas Kanade
-		if (frameNum > 1) {
-			LucasKanade();
-		}
+		LucasKanade();
+
+		// Shi Tomasi Corner Detection
+		ShiTomasiCorner();
 
 		// View
 		namedWindow("Input", WINDOW_NORMAL);
