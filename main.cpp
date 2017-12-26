@@ -14,6 +14,8 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/video/tracking.hpp"
+#include "opencv2/videoio.hpp"
 #include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
@@ -25,42 +27,81 @@
 using namespace cv;
 using namespace std;
 
-Mat src, src_gray;
-Mat dst, detected_edges, morph_closing, flood_fill;
+// configuration
 
+// 1. Window and Video Information
+Mat src, src_gray;
+Mat dst;
+String video_input = "CarsDrivingUnderBridge.mp4";
+
+int width = 0;
+int height = 0;
+int fps = 0, fourcc = 0;
+int frameNum = 0;
+
+// 2. Detection Zone
+int x_ld, y_ld;
+int x_rd, y_rd;
+int x_rt, y_rt;
+int x_lt, y_lt;
+
+float real_width = 17.5;
+float real_height = 35;
+
+// 3. Canny Edge
+Mat detected_edges;
 int edgeThresh = 1;
-int lowThreshold;
+int lowThreshold = 30;
 int const max_lowThreshold = 50;
 int ratio = 3;
 int kernel_size = 3;
 
+// 4. Morphological Closing
+Mat morph_closing;
+int interation = 7;
+
+// 5. Flood Fill
+Mat flood_fill;
+
+// 6. Count Density
+float density = 0;
+
+// 7. Shi Tomasi
+Mat shi_tomasi;
+
+// 8. Lucas Kanade Tracker
+Mat prevImg, nextImg;
+vector<Point2f> prevPts, nextPts;
+int prevFrameNum, nextFrameNum;
+float speed;
 
 /**
-* @function CannyThreshold
+* @function CannyEdge
 * @brief Trackbar callback - Canny thresholds input with a ratio 1:3
 */
-void CannyThreshold(int, void*)
+
+void CannyEdge(int, void*)
 {
 	/// Reduce noise with a kernel 3x3
 	blur(src_gray, detected_edges, Size(3, 3));
 
 	/// Canny detector
-	Canny(detected_edges, detected_edges, 30, 50, kernel_size);
+	Canny(detected_edges, detected_edges, lowThreshold, max_lowThreshold, kernel_size);
 
 	/// Using Canny's output as a mask, we display our result
 	dst = Scalar::all(0);
 
 	src.copyTo(dst, detected_edges);
 
-	// namedWindow("Detected Edges", WINDOW_NORMAL);
-	imshow("Detected Edges", detected_edges);
+	// namedWindow("Canny Edge", WINDOW_NORMAL);
+	imshow("Canny Edge", detected_edges);
 }
 
 void MorphologicalClosing() 
 {
 	Point anchor = Point(-1,-1);
 	Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3), anchor);
-	morphologyEx(detected_edges, morph_closing, MORPH_CLOSE, kernel, anchor, 7);
+	morphologyEx(detected_edges, morph_closing, MORPH_CLOSE, kernel, anchor, interation);
 
 	namedWindow("Morph Closing", WINDOW_NORMAL);
 	imshow("Morph Closing", morph_closing);
@@ -90,10 +131,82 @@ void FloodFill()
 
 	Mat im_floodfill_inv;
     bitwise_not(flood_fill, im_floodfill_inv);
-	Mat im_out = (im_th | im_floodfill_inv);
+	flood_fill = (im_th | im_floodfill_inv);
 
 	namedWindow("Flood Fill", WINDOW_NORMAL);
-	imshow("Flood Fill", im_out);
+	imshow("Flood Fill", flood_fill);
+}
+
+void CalculateDensity()
+{
+	int count_white = countNonZero(flood_fill);
+	density = count_white/(real_width*20*real_height*20);
+	cout << "Density : " << density << endl;
+}
+
+void ShiTomasiCorner()
+{
+	double qualityThreshold = 0.02;
+	double minDist = 30;
+	int blockSize = 5;
+	bool useHarrisDetector = false;
+	double k = 0.07;
+	Scalar color = Scalar(255, 0, 0);
+
+	src_gray.copyTo(shi_tomasi);
+
+	prevFrameNum = frameNum;
+
+	goodFeaturesToTrack(shi_tomasi, prevPts, 40, qualityThreshold, minDist, Mat(), blockSize, useHarrisDetector, k);
+
+	cout << "prevpts size " << prevPts.size() << endl;
+
+	// for(size_t i = 0; i < prevPts.size(); i++)
+	// {
+	// 	circle(shi_tomasi, prevPts[i], 8, color, 2, 8, 0);
+	// }
+	
+	// namedWindow("Shi Tomasi", WINDOW_NORMAL);
+	// imshow("Shi Tomasi", shi_tomasi);
+}
+
+void LucasKanade()
+{
+	vector<uchar> status;
+	vector<float> err;
+	double distance;
+	int duration;
+	float oneSpeed, totalSpeed;
+	TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
+
+	src_gray.copyTo(nextImg);
+	if (!prevImg.empty() && !nextImg.empty() && !prevPts.empty()) 
+	{
+		calcOpticalFlowPyrLK(prevImg, nextImg, prevPts, nextPts, status, err, Size(11,22), 3, termcrit, 0, 0.001);
+	}
+
+	// for (size_t i = 0; i < err.size(); i++)
+	// {
+	// 	cout << "Error :" << err[i] << endl;
+	// }
+	// Count Average Speed
+	nextFrameNum = frameNum;
+	duration = (nextFrameNum - prevFrameNum)*fps;
+
+	for (size_t i = 0; i < nextPts.size(); i++)
+	{
+		distance = norm(nextPts[i]-prevPts[i])/20;
+		oneSpeed = distance/duration;
+		totalSpeed += oneSpeed;
+	}
+	speed = totalSpeed/nextPts.size();
+	cout << "Duration : " << duration << endl;
+	cout << "Speed : " << speed << endl;
+	
+	// For next detection
+	src_gray.copyTo(prevImg);
+	prevFrameNum = frameNum;
+	prevPts = nextPts;
 }
 
 int main(int _argc, char** _argv)
@@ -105,7 +218,7 @@ int main(int _argc, char** _argv)
 
 	VideoCapture video;
 
-	video.open("CarsDrivingUnderBridge.mp4");
+	video.open(video_input);
 
 	if (!video.isOpened()) {                                                 // if unable to open video file
 		cout << "error reading video file" << endl << endl;      // show error message
@@ -120,7 +233,6 @@ int main(int _argc, char** _argv)
 	}
 
 	// Show video information
-	int width = 0, dest_width= 350, height = 0, dest_height = 700, fps = 0, fourcc = 0;
 	width = static_cast<int>(video.get(CV_CAP_PROP_FRAME_WIDTH));
 	height = static_cast<int>(video.get(CV_CAP_PROP_FRAME_HEIGHT));
 	fps = static_cast<int>(video.get(CV_CAP_PROP_FPS));
@@ -128,32 +240,38 @@ int main(int _argc, char** _argv)
 
 	cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 
+	x_ld = 120, y_ld = 550;
+	x_rd = width, y_rd = 550;
+	x_rt = (width / 2 + 234), y_rt = 140;
+	x_lt = (width / 2 - 165), y_lt = 140;
+
 	// The 4-points at the input image	
 	vector<Point2f> origPoints;
-	origPoints.push_back(Point2f(120, 550)); //kiri bawah
-	origPoints.push_back(Point2f(width, 550)); //kanan bawah
-	origPoints.push_back(Point2f(width / 2 + 234, 140)); //kanan atas
-	origPoints.push_back(Point2f(width / 2 - 165, 140)); //kiri atas
+	origPoints.push_back(Point2f(x_ld, y_ld)); //kiri bawah
+	origPoints.push_back(Point2f(x_rd, y_rd)); //kanan bawah
+	origPoints.push_back(Point2f(x_rt, y_rt)); //kanan atas
+	origPoints.push_back(Point2f(x_lt, y_lt)); //kiri atas
 
 	// The 4-points correspondences in the destination image
 	vector<Point2f> dstPoints;
-	dstPoints.push_back(Point2f(0, dest_height));
-	dstPoints.push_back(Point2f(dest_width, dest_height));
-	dstPoints.push_back(Point2f(dest_width, 0));
+	dstPoints.push_back(Point2f(0, real_height*20));
+	dstPoints.push_back(Point2f(real_width*20, real_height*20));
+	dstPoints.push_back(Point2f(real_width*20, 0));
 	dstPoints.push_back(Point2f(0, 0));
 
 	// IPM object
-	IPM ipm(Size(width, height), Size(350, 700), origPoints, dstPoints);
+	IPM ipm(Size(width, height), Size(real_width*20, real_height*20), origPoints, dstPoints);
 
+	// Initial Detection
+	
 
 	// Main loop
-	int frameNum = 0;
 	for (; ; )
 	{
+		frameNum++;
 		printf("FRAME #%6d ", frameNum);
 		fflush(stdout);
-		frameNum++;
-
+		
 		// Get current image		
 		video >> inputImg;
 		if (inputImg.empty())
@@ -170,7 +288,7 @@ int main(int _argc, char** _argv)
 		ipm.applyHomography(inputImg, outputImg);
 		clock_t end = clock();
 		double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
-		printf("%.2f (ms)\r", 1000 * elapsed_secs);
+		// printf("%.2f (ms)\r", 1000 * elapsed_secs);
 		ipm.drawPoints(origPoints, inputImg);
 
 		//canny edge detector
@@ -184,13 +302,13 @@ int main(int _argc, char** _argv)
 		cvtColor(src, src_gray, CV_BGR2GRAY);
 
 		/// Create a window
-		namedWindow("Detected Edges", WINDOW_NORMAL);
+		namedWindow("Canny Edge", WINDOW_NORMAL);
 
 		/// Create a Trackbar for user to enter threshold
-		// createTrackbar("Min Threshold:", "Detected Edges", &lowThreshold, max_lowThreshold, CannyThreshold);
+		// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
 
 		/// Run Canny
-		CannyThreshold(0,0);
+		CannyEdge(0,0);
 
 		/// Run Morph closing
 		MorphologicalClosing();
@@ -198,9 +316,23 @@ int main(int _argc, char** _argv)
 		/// Run Flood Fill
 		FloodFill();
 
+		// Calculate density
+		CalculateDensity();
+
+		// Shi Tomasi Corner Detection
+		if (frameNum == 1) {
+			ShiTomasiCorner();
+			src_gray.copyTo(prevImg);
+		}
+
+		// Lucas Kanade
+		if (frameNum > 1) {
+			LucasKanade();
+		}
+
 		// View
 		namedWindow("Input", WINDOW_NORMAL);
-		imshow("Input", src_gray);
+		imshow("Input", inputImg);
 
 		namedWindow("Output", WINDOW_NORMAL);
 		imshow("Output", outputImg);
