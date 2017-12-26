@@ -94,7 +94,7 @@ void CannyEdge(int, void*)
 	src.copyTo(dst, detected_edges);
 
 	// namedWindow("Canny Edge", WINDOW_NORMAL);
-	imshow("Canny Edge", detected_edges);
+	// imshow("Canny Edge", detected_edges);
 }
 
 void MorphologicalClosing() 
@@ -103,8 +103,8 @@ void MorphologicalClosing()
 	Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3), anchor);
 	morphologyEx(detected_edges, morph_closing, MORPH_CLOSE, kernel, anchor, interation);
 
-	namedWindow("Morph Closing", WINDOW_NORMAL);
-	imshow("Morph Closing", morph_closing);
+	// namedWindow("Morph Closing", WINDOW_NORMAL);
+	// imshow("Morph Closing", morph_closing);
 }
 
 void FloodFill()
@@ -133,15 +133,15 @@ void FloodFill()
     bitwise_not(flood_fill, im_floodfill_inv);
 	flood_fill = (im_th | im_floodfill_inv);
 
-	namedWindow("Flood Fill", WINDOW_NORMAL);
-	imshow("Flood Fill", flood_fill);
+	// namedWindow("Flood Fill", WINDOW_NORMAL);
+	// imshow("Flood Fill", flood_fill);
 }
 
 void CalculateDensity()
 {
 	int count_white = countNonZero(flood_fill);
 	density = count_white/(real_width*20*real_height*20);
-	cout << "Density : " << density << endl;
+	cout << endl <<"Density : " << density << endl;
 }
 
 void ShiTomasiCorner()
@@ -188,7 +188,7 @@ void LucasKanade()
 		duration = ((float)(nextFrameNum - prevFrameNum)/(float)fps);
 		// cout << "Duration : " << nextFrameNum << "-"<< prevFrameNum << "/" << fps << endl;
 		// cout << "Duration : " << duration << endl;
-		
+
 		for (size_t i = 0; i < nextPts.size(); i++)
 		{
 			distance = (norm(nextPts[i]-prevPts[i])/20);
@@ -198,17 +198,28 @@ void LucasKanade()
 			totalSpeed += oneSpeed;
 		}
 		speed = (totalSpeed/(float)nextPts.size());
-		cout << "Speed : " << speed << endl  << endl;
+		cout << "Speed : " << speed << endl;
 		
-		RNG rng(12345);
-		for(size_t i = 0; i < prevPts.size(); i++)
-		{
-			Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
-			circle(src, prevPts[i], 8, color, 2, 8, 0);
-			circle(src, nextPts[i], 8, color, 2, 8, 0);
-		}
-		namedWindow("Lucas Kanade", WINDOW_NORMAL);
-		imshow("Lucas Kanade", src);
+		// RNG rng(12345);
+		// for(size_t i = 0; i < prevPts.size(); i++)
+		// {
+		// 	Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+		// 	circle(src, prevPts[i], 8, color, 2, 8, 0);
+		// 	circle(src, nextPts[i], 8, color, 2, 8, 0);
+		// }
+		// namedWindow("Lucas Kanade", WINDOW_NORMAL);
+		// imshow("Lucas Kanade", src);
+	}
+}
+
+void TrafficState()
+{
+	if (density < 0.5) {
+		cout << "Lancar" << endl << endl;
+	} else if ((density >= 0.5) && (speed > 0.5)){
+		cout << "Ramai Lancar" << endl << endl;
+	} else {
+		cout << "Padat" << endl << endl;
 	}
 }
 
@@ -305,7 +316,7 @@ int main(int _argc, char** _argv)
 		cvtColor(src, src_gray, CV_BGR2GRAY);
 
 		/// Create a window
-		namedWindow("Canny Edge", WINDOW_NORMAL);
+		// namedWindow("Canny Edge", WINDOW_NORMAL);
 
 		/// Create a Trackbar for user to enter threshold
 		// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
@@ -328,12 +339,15 @@ int main(int _argc, char** _argv)
 		// Shi Tomasi Corner Detection
 		ShiTomasiCorner();
 
-		// View
-		namedWindow("Input", WINDOW_NORMAL);
-		imshow("Input", inputImg);
+		// Traffic State
+		TrafficState();
 
-		namedWindow("Output", WINDOW_NORMAL);
-		imshow("Output", outputImg);
+		// View
+		// namedWindow("Input", WINDOW_NORMAL);
+		// imshow("Input", inputImg);
+
+		// namedWindow("Output", WINDOW_NORMAL);
+		// imshow("Output", outputImg);
 		waitKey(1);
 	}
 
