@@ -47,7 +47,7 @@ Mat inputImg;
 // 1. Window and Video Information
 Mat src, src_gray;
 Mat dst;
-String video_input = "CarsDrivingUnderBridge.mp4";
+String video_input = "http://127.0.0.1:5000/video_feed";
 
 int width = 0;
 int height = 0;
@@ -287,27 +287,25 @@ class GreeterServiceImpl final : public Greeter::Service {
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
 
-		VideoCapture video;
-						
-		video.open(video_input);
+		VideoCapture cap(video_input);
 	
-		if (!video.isOpened()) {                                                 // if unable to open video file
+		if (!cap.isOpened()) {                                                 // if unable to open video file
 			cout << "error reading video file" << endl << endl;      // show error message
 			// _getch();                   // it may be necessary to change or remove this line if not using Windows
 			// return(0);                                                              // and exit program
 		}
 	
-		if (video.get(CV_CAP_PROP_FRAME_COUNT) < 2) {
+		if (cap.get(CAP_PROP_FRAME_COUNT) < 2) {
 			cout << "error: video file must have at least two frames";
 			// _getch();                   // it may be necessary to change or remove this line if not using Windows
 			// return(0);
 		}
 	
 		// Show video information
-		width = static_cast<int>(video.get(CV_CAP_PROP_FRAME_WIDTH));
-		height = static_cast<int>(video.get(CV_CAP_PROP_FRAME_HEIGHT));
-		fps = static_cast<int>(video.get(CV_CAP_PROP_FPS));
-		fourcc = static_cast<int>(video.get(CV_CAP_PROP_FOURCC));
+		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 	
 		cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 	
@@ -320,7 +318,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 			fflush(stdout);
 			
 			// Get current image		
-			video >> inputImg;
+			cap >> inputImg;
 			if (inputImg.empty())
 				break;
 	
@@ -366,8 +364,8 @@ class GreeterServiceImpl final : public Greeter::Service {
 			TrafficState(writer);
 	
 			// View
-			// namedWindow("Input", WINDOW_NORMAL);
-			// imshow("Input", inputImg);
+			namedWindow("Input", WINDOW_NORMAL);
+			imshow("Input", inputImg);
 	
 			// namedWindow("Output", WINDOW_NORMAL);
 			// imshow("Output", outputImg);
