@@ -16,18 +16,33 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/video/tracking.hpp"
 #include "opencv2/videoio.hpp"
+
+#include <grpc++/grpc++.h>
 #include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
 // #include <conio.h>
 #include <ctime>
+#include <memory>
+#include <string>
+
+#include "helloworld.grpc.pb.h"
 
 #include "IPM.h"
 
 using namespace cv;
 using namespace std;
+using grpc::Server;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using grpc::ServerWriter;
+using grpc::Status;
+using helloworld::HelloRequest;
+using helloworld::HelloReply;
+using helloworld::Greeter;
 
 // configuration
+Mat inputImg;
 
 // 1. Window and Video Information
 Mat src, src_gray;
@@ -39,7 +54,9 @@ int height = 0;
 int fps = 0, fourcc = 0;
 int frameNum = 0;
 
-// 2. Detection Zone
+// 2. Bird Eye View
+Mat bird_eye_view;
+
 int x_ld, y_ld;
 int x_rd, y_rd;
 int x_rt, y_rt;
@@ -74,6 +91,34 @@ Mat prevImg, nextImg;
 vector<Point2f> prevPts, nextPts;
 int prevFrameNum, nextFrameNum;
 float speed;
+
+void BirdEyeView()
+{
+	x_ld = 120, y_ld = 550;
+	x_rd = width, y_rd = 550;
+	x_rt = (width / 2 + 234), y_rt = 140;
+	x_lt = (width / 2 - 165), y_lt = 140;
+
+	// The 4-points at the input image	
+	vector<Point2f> origPoints;
+	origPoints.push_back(Point2f(x_ld, y_ld)); //kiri bawah
+	origPoints.push_back(Point2f(x_rd, y_rd)); //kanan bawah
+	origPoints.push_back(Point2f(x_rt, y_rt)); //kanan atas
+	origPoints.push_back(Point2f(x_lt, y_lt)); //kiri atas
+
+	// The 4-points correspondences in the destination image
+	vector<Point2f> dstPoints;
+	dstPoints.push_back(Point2f(0, real_height*20));
+	dstPoints.push_back(Point2f(real_width*20, real_height*20));
+	dstPoints.push_back(Point2f(real_width*20, 0));
+	dstPoints.push_back(Point2f(0, 0));
+
+	// IPM object
+	IPM ipm(Size(width, height), Size(real_width*20, real_height*20), origPoints, dstPoints);
+
+	ipm.applyHomography(inputImg, bird_eye_view);
+	ipm.drawPoints(origPoints, inputImg);
+}
 
 /**
 * @function CannyEdge
@@ -212,144 +257,149 @@ void LucasKanade()
 	}
 }
 
-void TrafficState()
+void TrafficState(ServerWriter<HelloReply>* writer)
 {
+	HelloReply r;
+	
 	if (density < 0.5) {
+		// grpc
+		r.set_message("Lancar");
+		writer->Write(r);
+		// output to console
 		cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
+		// grpc
+		r.set_message("Ramai Lancar");
+		writer->Write(r);
+		// output to console
 		cout << "Ramai Lancar" << endl << endl;
 	} else {
+		// grpc
+		r.set_message("Padat");
+		writer->Write(r);
+		// output to console
 		cout << "Padat" << endl << endl;
 	}
 }
 
+class GreeterServiceImpl final : public Greeter::Service {
+	Status SayHello(ServerContext* context,
+					const HelloRequest* request,
+					ServerWriter<HelloReply>* writer) override {
+
+		VideoCapture video;
+						
+		video.open(video_input);
+	
+		if (!video.isOpened()) {                                                 // if unable to open video file
+			cout << "error reading video file" << endl << endl;      // show error message
+			// _getch();                   // it may be necessary to change or remove this line if not using Windows
+			// return(0);                                                              // and exit program
+		}
+	
+		if (video.get(CV_CAP_PROP_FRAME_COUNT) < 2) {
+			cout << "error: video file must have at least two frames";
+			// _getch();                   // it may be necessary to change or remove this line if not using Windows
+			// return(0);
+		}
+	
+		// Show video information
+		width = static_cast<int>(video.get(CV_CAP_PROP_FRAME_WIDTH));
+		height = static_cast<int>(video.get(CV_CAP_PROP_FRAME_HEIGHT));
+		fps = static_cast<int>(video.get(CV_CAP_PROP_FPS));
+		fourcc = static_cast<int>(video.get(CV_CAP_PROP_FOURCC));
+	
+		cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+	
+	
+		// Main loop
+		for (; ; )
+		{
+			frameNum++;
+			printf("FRAME #%6d ", frameNum);
+			fflush(stdout);
+			
+			// Get current image		
+			video >> inputImg;
+			if (inputImg.empty())
+				break;
+	
+			bird_eye_view = inputImg;
+			// Bird Eye View
+			BirdEyeView();
+	
+			//canny edge detector
+			/// Load an image
+			src = bird_eye_view;
+	
+			/// Create a matrix of the same type and size as src (for dst)
+			dst.create(src.size(), src.type());
+	
+			/// Convert the image to grayscale
+			cvtColor(src, src_gray, CV_BGR2GRAY);
+	
+			/// Create a window
+			// namedWindow("Canny Edge", WINDOW_NORMAL);
+	
+			/// Create a Trackbar for user to enter threshold
+			// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
+	
+			/// Run Canny
+			CannyEdge(0,0);
+	
+			/// Run Morph closing
+			MorphologicalClosing();
+	
+			/// Run Flood Fill
+			FloodFill();
+	
+			// Calculate density
+			CalculateDensity();
+	
+			// Lucas Kanade
+			LucasKanade();
+	
+			// Shi Tomasi Corner Detection
+			ShiTomasiCorner();
+	
+			// Traffic State
+			TrafficState(writer);
+	
+			// View
+			// namedWindow("Input", WINDOW_NORMAL);
+			// imshow("Input", inputImg);
+	
+			// namedWindow("Output", WINDOW_NORMAL);
+			// imshow("Output", outputImg);
+			waitKey(1);
+		}
+	  	
+	  	return Status::OK;
+	}
+};
+
+void RunServer() {
+	std::string server_address("0.0.0.0:50051");
+	GreeterServiceImpl service;
+  
+	ServerBuilder builder;
+	// Listen on the given address without any authentication mechanism.
+	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+	// Register "service" as the instance through which we'll communicate with
+	// clients. In this case it corresponds to an *synchronous* service.
+	builder.RegisterService(&service);
+	// Finally assemble the server.
+	std::unique_ptr<Server> server(builder.BuildAndStart());
+	std::cout << "Server listening on " << server_address << std::endl;
+  
+	// Wait for the server to shutdown. Note that some other thread must be
+	// responsible for shutting down the server for this call to ever return.
+	server->Wait();
+}
+
 int main(int _argc, char** _argv)
 {
-
-	// Images
-	Mat inputImg, inputImgGray;
-	Mat outputImg;
-
-	VideoCapture video;
-
-	video.open(video_input);
-
-	if (!video.isOpened()) {                                                 // if unable to open video file
-		cout << "error reading video file" << endl << endl;      // show error message
-		// _getch();                   // it may be necessary to change or remove this line if not using Windows
-		return(0);                                                              // and exit program
-	}
-
-	if (video.get(CV_CAP_PROP_FRAME_COUNT) < 2) {
-		cout << "error: video file must have at least two frames";
-		// _getch();                   // it may be necessary to change or remove this line if not using Windows
-		return(0);
-	}
-
-	// Show video information
-	width = static_cast<int>(video.get(CV_CAP_PROP_FRAME_WIDTH));
-	height = static_cast<int>(video.get(CV_CAP_PROP_FRAME_HEIGHT));
-	fps = static_cast<int>(video.get(CV_CAP_PROP_FPS));
-	fourcc = static_cast<int>(video.get(CV_CAP_PROP_FOURCC));
-
-	cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
-
-	x_ld = 120, y_ld = 550;
-	x_rd = width, y_rd = 550;
-	x_rt = (width / 2 + 234), y_rt = 140;
-	x_lt = (width / 2 - 165), y_lt = 140;
-
-	// The 4-points at the input image	
-	vector<Point2f> origPoints;
-	origPoints.push_back(Point2f(x_ld, y_ld)); //kiri bawah
-	origPoints.push_back(Point2f(x_rd, y_rd)); //kanan bawah
-	origPoints.push_back(Point2f(x_rt, y_rt)); //kanan atas
-	origPoints.push_back(Point2f(x_lt, y_lt)); //kiri atas
-
-	// The 4-points correspondences in the destination image
-	vector<Point2f> dstPoints;
-	dstPoints.push_back(Point2f(0, real_height*20));
-	dstPoints.push_back(Point2f(real_width*20, real_height*20));
-	dstPoints.push_back(Point2f(real_width*20, 0));
-	dstPoints.push_back(Point2f(0, 0));
-
-	// IPM object
-	IPM ipm(Size(width, height), Size(real_width*20, real_height*20), origPoints, dstPoints);
-
-	// Initial Detection
-	
-
-	// Main loop
-	for (; ; )
-	{
-		frameNum++;
-		printf("FRAME #%6d ", frameNum);
-		fflush(stdout);
-		
-		// Get current image		
-		video >> inputImg;
-		if (inputImg.empty())
-			break;
-
-		// Color Conversion
-		if (inputImg.channels() == 3)
-			cvtColor(inputImg, inputImgGray, CV_BGR2GRAY);
-		else
-			inputImg.copyTo(inputImgGray);
-
-		// Process
-		clock_t begin = clock();
-		ipm.applyHomography(inputImg, outputImg);
-		clock_t end = clock();
-		double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
-		// printf("%.2f (ms)\r", 1000 * elapsed_secs);
-		ipm.drawPoints(origPoints, inputImg);
-
-		//canny edge detector
-		/// Load an image
-		src = outputImg;
-
-		/// Create a matrix of the same type and size as src (for dst)
-		dst.create(src.size(), src.type());
-
-		/// Convert the image to grayscale
-		cvtColor(src, src_gray, CV_BGR2GRAY);
-
-		/// Create a window
-		// namedWindow("Canny Edge", WINDOW_NORMAL);
-
-		/// Create a Trackbar for user to enter threshold
-		// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
-
-		/// Run Canny
-		CannyEdge(0,0);
-
-		/// Run Morph closing
-		MorphologicalClosing();
-
-		/// Run Flood Fill
-		FloodFill();
-
-		// Calculate density
-		CalculateDensity();
-
-		// Lucas Kanade
-		LucasKanade();
-
-		// Shi Tomasi Corner Detection
-		ShiTomasiCorner();
-
-		// Traffic State
-		TrafficState();
-
-		// View
-		// namedWindow("Input", WINDOW_NORMAL);
-		// imshow("Input", inputImg);
-
-		// namedWindow("Output", WINDOW_NORMAL);
-		// imshow("Output", outputImg);
-		waitKey(1);
-	}
+	RunServer();
 
 	return 0;
 }
