@@ -288,17 +288,11 @@ class GreeterServiceImpl final : public Greeter::Service {
 					ServerWriter<HelloReply>* writer) override {
 
 		VideoCapture cap(video_input);
-	
+
 		if (!cap.isOpened()) {                                                 // if unable to open video file
 			cout << "error reading video file" << endl << endl;      // show error message
 			// _getch();                   // it may be necessary to change or remove this line if not using Windows
 			// return(0);                                                              // and exit program
-		}
-	
-		if (cap.get(CAP_PROP_FRAME_COUNT) < 2) {
-			cout << "error: video file must have at least two frames";
-			// _getch();                   // it may be necessary to change or remove this line if not using Windows
-			// return(0);
 		}
 	
 		// Show video information
