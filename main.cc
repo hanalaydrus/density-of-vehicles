@@ -21,7 +21,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
-// #include <conio.h>
+#include <thread>
 #include <ctime>
 #include <memory>
 #include <string>
@@ -42,12 +42,13 @@ using helloworld::HelloReply;
 using helloworld::Greeter;
 
 // configuration
-Mat inputImg;
+int frameNumReal = 0;
+vector<Mat> inputImgArr;
+Mat inputImg, inputImgReal;
 
 // 1. Window and Video Information
 Mat src, src_gray;
 Mat dst;
-String video_input = "http://127.0.0.1:5000/video_feed";
 
 int width = 0;
 int height = 0;
@@ -91,6 +92,40 @@ Mat prevImg, nextImg;
 vector<Point2f> prevPts, nextPts;
 int prevFrameNum, nextFrameNum;
 float speed;
+
+// 9. Traffic State
+String traffic_state;
+
+void GetFrame()
+{
+	VideoCapture cap("http://127.0.0.1:5000/video_feed");
+
+	if (!cap.isOpened()) {                                                 // if unable to open video file
+		cout << "error reading video file" << endl << endl;      // show error message
+		// _getch();                   // it may be necessary to change or remove this line if not using Windows
+		// return(0);                                                              // and exit program
+	}
+
+	// Show video information
+	width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+	height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+	fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+	fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
+
+	cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+	// Get current image
+	for (;;) 
+	{
+		cap >> inputImgReal;
+		if (inputImgReal.empty())
+		{
+			cout << "Input image empty" << endl;
+			continue;
+		}
+		inputImgArr.push_back(inputImgReal);
+		frameNumReal++;
+	}
+}
 
 void BirdEyeView()
 {
@@ -198,10 +233,7 @@ void ShiTomasiCorner()
 	double k = 0.07;
 	Scalar color = Scalar(255, 0, 0);
 
-	src_gray.copyTo(shi_tomasi);
-	src_gray.copyTo(prevImg);
-
-	prevFrameNum = frameNum;
+	prevImg.copyTo(shi_tomasi);
 
 	goodFeaturesToTrack(shi_tomasi, prevPts, 40, qualityThreshold, minDist, Mat(), blockSize, useHarrisDetector, k);
 
@@ -222,6 +254,7 @@ void LucasKanade()
 	float duration;
 	float oneSpeed, totalSpeed;
 	TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
+	int count = 0;
 
 	src_gray.copyTo(nextImg);
 	if (!prevImg.empty() && !nextImg.empty() && !prevPts.empty()) 
@@ -229,20 +262,23 @@ void LucasKanade()
 		calcOpticalFlowPyrLK(prevImg, nextImg, prevPts, nextPts, status, err, Size(11,22), 3, termcrit, 0, 0.001);
 		
 		// Count Average Speed
-		nextFrameNum = frameNum;
-		duration = ((float)(nextFrameNum - prevFrameNum)/(float)fps);
+		duration = ((float)(1)/(float)fps);
 		// cout << "Duration : " << nextFrameNum << "-"<< prevFrameNum << "/" << fps << endl;
 		// cout << "Duration : " << duration << endl;
 
 		for (size_t i = 0; i < nextPts.size(); i++)
 		{
-			distance = (norm(nextPts[i]-prevPts[i])/20);
-			// cout << "Distance : " << distance << endl;
-			oneSpeed = ((float)distance/duration);
-			// cout << "OneSpeed : " << oneSpeed << endl;
-			totalSpeed += oneSpeed;
+			if (status[i] == 1) {
+				distance = ((nextPts[i].y-prevPts[i].y)/20);
+				// cout << "Distance : " << distance << endl;
+				oneSpeed = ((float)distance/duration);
+				// cout << "OneSpeed : " << oneSpeed << endl;
+				if (oneSpeed < 0){oneSpeed = 0;}
+				totalSpeed += oneSpeed;
+				count++;
+			}
 		}
-		speed = (totalSpeed/(float)nextPts.size());
+		speed = (totalSpeed/(float)count);
 		cout << "Speed : " << speed << endl;
 		
 		// RNG rng(12345);
@@ -257,28 +293,99 @@ void LucasKanade()
 	}
 }
 
-void TrafficState(ServerWriter<HelloReply>* writer)
-{
-	HelloReply r;
-	
+void TrafficState()
+{	
 	if (density < 0.5) {
-		// grpc
-		r.set_message("Lancar");
-		writer->Write(r);
+		// change traffic state
+		traffic_state = "Lancar";
 		// output to console
 		cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
-		// grpc
-		r.set_message("Ramai Lancar");
-		writer->Write(r);
+		// change traffic state
+		traffic_state = "Ramai Lancar";
 		// output to console
 		cout << "Ramai Lancar" << endl << endl;
 	} else {
-		// grpc
-		r.set_message("Padat");
-		writer->Write(r);
+		// change traffic state
+		traffic_state = "Padat";
 		// output to console
 		cout << "Padat" << endl << endl;
+	}
+}
+
+void Run(){
+
+	// Main loop
+	for (; ; )
+	{
+		if (inputImgReal.empty() && frameNum != 0){break;}
+		if (inputImgReal.empty()){continue;}
+
+		if (frameNumReal>1) {
+			inputImgReal.copyTo(inputImg);
+			inputImgArr[frameNumReal-2].copyTo(prevImg);
+		} else if (frameNumReal <= 1) {
+			inputImgReal.copyTo(inputImg);
+			inputImgReal.copyTo(prevImg);
+		}
+		frameNum++;
+		cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
+
+		// Bird Eye View First
+		bird_eye_view = prevImg;
+		BirdEyeView();
+		prevImg = bird_eye_view;
+		cvtColor(prevImg, prevImg, CV_BGR2GRAY);
+
+		// Bird Eye View Second
+		bird_eye_view = inputImg;
+		
+		BirdEyeView();
+
+		//canny edge detector
+		/// Load an image
+		src = bird_eye_view;
+
+		/// Create a matrix of the same type and size as src (for dst)
+		dst.create(src.size(), src.type());
+
+		/// Convert the image to grayscale
+		cvtColor(src, src_gray, CV_BGR2GRAY);
+
+		/// Create a window
+		// namedWindow("Canny Edge", WINDOW_NORMAL);
+
+		/// Create a Trackbar for user to enter threshold
+		// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
+
+		/// Run Canny
+		CannyEdge(0,0);
+
+		/// Run Morph closing
+		MorphologicalClosing();
+
+		/// Run Flood Fill
+		FloodFill();
+
+		// Calculate density
+		CalculateDensity();
+
+		// Shi Tomasi Corner Detection
+		ShiTomasiCorner();
+
+		// Lucas Kanade
+		LucasKanade();
+
+		// Traffic State
+		TrafficState();
+
+		// View
+		namedWindow("Input", WINDOW_NORMAL);
+		imshow("Input", inputImg);
+
+		// namedWindow("Output", WINDOW_NORMAL);
+		// imshow("Output", outputImg);
+		waitKey(1);
 	}
 }
 
@@ -286,86 +393,13 @@ class GreeterServiceImpl final : public Greeter::Service {
 	Status SayHello(ServerContext* context,
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
-
-		VideoCapture cap(video_input);
-
-		if (!cap.isOpened()) {                                                 // if unable to open video file
-			cout << "error reading video file" << endl << endl;      // show error message
-			// _getch();                   // it may be necessary to change or remove this line if not using Windows
-			// return(0);                                                              // and exit program
-		}
-	
-		// Show video information
-		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
-		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
-		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
-	
-		cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
-	
-	
-		// Main loop
+		
+		HelloReply r;
 		for (; ; )
 		{
-			frameNum++;
-			printf("FRAME #%6d ", frameNum);
-			fflush(stdout);
-			
-			// Get current image		
-			cap >> inputImg;
-			if (inputImg.empty())
-				break;
-	
-			bird_eye_view = inputImg;
-			// Bird Eye View
-			BirdEyeView();
-	
-			//canny edge detector
-			/// Load an image
-			src = bird_eye_view;
-	
-			/// Create a matrix of the same type and size as src (for dst)
-			dst.create(src.size(), src.type());
-	
-			/// Convert the image to grayscale
-			cvtColor(src, src_gray, CV_BGR2GRAY);
-	
-			/// Create a window
-			// namedWindow("Canny Edge", WINDOW_NORMAL);
-	
-			/// Create a Trackbar for user to enter threshold
-			// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
-	
-			/// Run Canny
-			CannyEdge(0,0);
-	
-			/// Run Morph closing
-			MorphologicalClosing();
-	
-			/// Run Flood Fill
-			FloodFill();
-	
-			// Calculate density
-			CalculateDensity();
-	
-			// Lucas Kanade
-			LucasKanade();
-	
-			// Shi Tomasi Corner Detection
-			ShiTomasiCorner();
-	
-			// Traffic State
-			TrafficState(writer);
-	
-			// View
-			namedWindow("Input", WINDOW_NORMAL);
-			imshow("Input", inputImg);
-	
-			// namedWindow("Output", WINDOW_NORMAL);
-			// imshow("Output", outputImg);
-			waitKey(1);
+			r.set_message(traffic_state);
+			writer->Write(r);
 		}
-	  	
 	  	return Status::OK;
 	}
 };
@@ -391,7 +425,13 @@ void RunServer() {
 
 int main(int _argc, char** _argv)
 {
-	RunServer();
+	thread first (GetFrame);
+	thread second (Run);
+	thread third (RunServer);
 
+	first.join();
+	second.join();
+	third.join();
+	
 	return 0;
 }
