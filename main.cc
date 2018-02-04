@@ -99,27 +99,23 @@ String traffic_state;
 void GetFrame()
 {
 	VideoCapture cap("http://127.0.0.1:5000/video_feed");
-
-	if (!cap.isOpened()) {                                                 // if unable to open video file
-		cout << "error reading video file" << endl << endl;      // show error message
-		// _getch();                   // it may be necessary to change or remove this line if not using Windows
-		// return(0);                                                              // and exit program
-	}
-
-	// Show video information
-	width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-	height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
-	fps = static_cast<int>(cap.get(CAP_PROP_FPS));
-	fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
-
-	cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
-	// Get current image
 	for (;;) 
 	{
+		// Get current image
 		cap >> inputImgReal;
 		if (inputImgReal.empty())
 		{
 			cout << "Input image empty" << endl;
+			cap.open("http://127.0.0.1:5000/video_feed");
+			if (cap.isOpened()){
+				// Show video information
+				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+				fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
+
+				cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+			}
 			continue;
 		}
 		inputImgArr.push_back(inputImgReal);
