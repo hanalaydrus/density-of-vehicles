@@ -58,10 +58,10 @@ int frameNum = 0;
 // 2. Bird Eye View
 Mat bird_eye_view;
 
-int x_ld, y_ld;
-int x_rd, y_rd;
-int x_rt, y_rt;
-int x_lt, y_lt;
+int x_lb = 120, y_lb = 550;
+int x_rb = 1280, y_rb = 550;
+int x_rt = 874, y_rt = 140;
+int x_lt = 475, y_lt = 140;
 
 float real_width = 17.5;
 float real_height = 35;
@@ -99,6 +99,15 @@ String traffic_state;
 void GetFrame()
 {
 	VideoCapture cap("http://127.0.0.1:5000/video_feed");
+	if (cap.isOpened()){
+		// Show video information
+		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
+
+		cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+	}
 	for (;;) 
 	{
 		// Get current image
@@ -113,7 +122,7 @@ void GetFrame()
 				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
 				fps = static_cast<int>(cap.get(CAP_PROP_FPS));
 				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
-
+	
 				cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 			}
 			continue;
@@ -125,15 +134,19 @@ void GetFrame()
 
 void BirdEyeView()
 {
-	x_ld = 120, y_ld = 550;
-	x_rd = width, y_rd = 550;
-	x_rt = (width / 2 + 234), y_rt = 140;
-	x_lt = (width / 2 - 165), y_lt = 140;
+	// x_lb = 120, y_lb = 550;
+	// x_rb = width, y_rb = 550;
+	// x_rt = (width / 2 + 234), y_rt = 140;
+	// x_lt = (width / 2 - 165), y_lt = 140;
+
+	// cout << "x_rb : " << x_rb << endl;
+	// cout << "x_rt : " << x_rt << endl;
+	// cout << "x_lt : " << x_lt << endl;
 
 	// The 4-points at the input image	
 	vector<Point2f> origPoints;
-	origPoints.push_back(Point2f(x_ld, y_ld)); //kiri bawah
-	origPoints.push_back(Point2f(x_rd, y_rd)); //kanan bawah
+	origPoints.push_back(Point2f(x_lb, y_lb)); //kiri bawah
+	origPoints.push_back(Point2f(x_rb, y_rb)); //kanan bawah
 	origPoints.push_back(Point2f(x_rt, y_rt)); //kanan atas
 	origPoints.push_back(Point2f(x_lt, y_lt)); //kiri atas
 
