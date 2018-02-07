@@ -34,6 +34,5 @@ message HelloRequest {
 
 // The response message containing the greetings
 message HelloReply {
-  string timestamp = 1;
-  string response = 2;
+  string response = 1;
 }

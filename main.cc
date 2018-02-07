@@ -10,12 +10,6 @@
 * Date:	 22/02/2014
 * Homepage: http://marcosnietoblog.wordpress.com/
 */
-#include "mysql_connection.h"
-
-#include <cppconn/driver.h>
-#include <cppconn/exception.h>
-#include <cppconn/resultset.h>
-#include <cppconn/statement.h>
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -34,10 +28,10 @@
 #include <vector>
 #include <map>
 #include "boost/variant.hpp"
-
 #include "helloworld.grpc.pb.h"
 
 #include "IPM.h"
+#include "Model.h"
 
 using namespace cv;
 using namespace std;
@@ -50,13 +44,10 @@ using helloworld::HelloRequest;
 using helloworld::HelloReply;
 using helloworld::Greeter;
 
-mutex mtx;
-
 // configuration
 int frameNumReal = 0;
-vector< vector<Mat> > inputImgArr;
-vector<Mat> inputImgReal;
-Mat inputImg;
+vector< Mat > inputImgArr;
+Mat inputImg, inputImgReal;
 
 // 1. Window and Video Information
 Mat src, src_gray;
@@ -70,25 +61,13 @@ int frameNum = 0;
 // 2. Bird Eye View
 Mat bird_eye_view;
 
-int x_lb = 120, y_lb = 550;
-int x_rb = 1280, y_rb = 550;
-int x_rt = 874, y_rt = 140;
-int x_lt = 475, y_lt = 140;
-
-float real_width = 17.5;
-float real_height = 35;
-
 // 3. Canny Edge
 Mat detected_edges;
-int edgeThresh = 1;
-int lowThreshold = 30;
-int const max_lowThreshold = 50;
 int ratio = 3;
 int kernel_size = 3;
 
 // 4. Morphological Closing
 Mat morph_closing;
-int interation = 7;
 
 // 5. Flood Fill
 Mat flood_fill;
@@ -110,119 +89,7 @@ String traffic_state;
 
 //////////////////////////////////////////////////////////////////////
 
-vector<string> GetDensityByID(int camera_id) {
-	// Input : camera_id
-	// Output : time, density
-	vector<string> response;
-	try {
-		sql::Driver *driver;
-		sql::Connection *con;
-		sql::Statement *stmt;
-		sql::ResultSet *res;
-	  
-		/* Create a connection */
-		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
-		/* Connect to the MySQL test database */
-		con->setSchema("density");
-	  
-		stmt = con->createStatement();
-		ostringstream query;
-		query << "SELECT * FROM `density_history` WHERE `camera_id` = " << camera_id << " ORDER BY `date_time` DESC LIMIT 1";
-		res = stmt->executeQuery(query.str());
-		while (res->next()) {
-			response.push_back(res->getString("date_time"));
-			response.push_back(res->getString("density_state"));
-		}
-		delete res;
-		delete stmt;
-		delete con;
-	  
-	  } catch (sql::SQLException &e) {
-		cout << "# ERR: SQLException in " << __FILE__;
-		cout << "# ERR: " << e.what();
-		cout << " (MySQL error code: " << e.getErrorCode();
-		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
-	  }
-
-	  return response;
-}
-
-void StoreDensityData(int camera_id, string density_state) {
-	// Input : id, density_data
-	// Output : -
-	try {
-		sql::Driver *driver;
-		sql::Connection *con;
-		sql::Statement *stmt;
-	  
-		/* Create a connection */
-		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
-		/* Connect to the MySQL test database */
-		con->setSchema("density");
-	  
-		stmt = con->createStatement();
-		ostringstream query;
-		query << "INSERT INTO `density_history`(`camera_id`, `density_state`) VALUES ("<< camera_id <<",'Padat')";
-		stmt->execute(query.str());
-		
-		delete stmt;
-		delete con;
-	  
-	  } catch (sql::SQLException &e) {
-		cout << "# ERR: SQLException in store density, " << __FILE__;
-		cout << "# ERR: " << e.what();
-		cout << " (MySQL error code: " << e.getErrorCode();
-		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
-	  }
-	
-}
-
-vector< map<string, boost::variant<int, string>> > GetCameras() {
-	// Input : -
-	// Output : Array of Map
-	vector< map<string, boost::variant<int, string>> > cameras;
-	try {
-		sql::Driver *driver;
-		sql::Connection *con;
-		sql::Statement *stmt;
-		sql::ResultSet *res;
-	  
-		/* Create a connection */
-		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
-		/* Connect to the MySQL test database */
-		con->setSchema("camera");
-	  
-		stmt = con->createStatement();
-		res = stmt->executeQuery("SELECT * FROM `camera`");
-		while (res->next()) {
-		  /* Access column data by alias or column name */
-			map<string, boost::variant<int, string>> data;
-			data["camera_id"] = res->getInt("camera_id");
-			data["url"] = res->getString("url");
-			
-			cameras.push_back(data);
-		}
-		
-		delete res;
-		delete stmt;
-		delete con;
-	  
-	  } catch (sql::SQLException &e) {
-		cout << "# ERR: SQLException in " << __FILE__;
-		cout << "# ERR: " << e.what();
-		cout << " (MySQL error code: " << e.getErrorCode();
-		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
-	  }
-	  
-	  return cameras;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void GetFrame(int camera_id, string url)
+void GetFrame(string url)
 {
 	VideoCapture cap(url);
 
@@ -233,17 +100,15 @@ void GetFrame(int camera_id, string url)
 		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
 		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 
-		cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+		std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 	}
 	for (;;) 
 	{
 		// Get current image
-		mtx.lock();
-		cap >> inputImgReal[camera_id];
-		mtx.unlock();
-		if (inputImgReal[camera_id].empty())
+		cap >> inputImgReal;
+		if (inputImgReal.empty())
 		{
-			cout << "Input image empty" << endl;
+			std::cout << "Input image empty" << endl;
 			cap.open(url);
 			if (cap.isOpened()){
 				// Show video information
@@ -252,18 +117,18 @@ void GetFrame(int camera_id, string url)
 				fps = static_cast<int>(cap.get(CAP_PROP_FPS));
 				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 	
-				cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+				std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 			}
 			continue;
 		}
-		mtx.lock();
-		inputImgArr[camera_id].push_back(inputImgReal[camera_id]);
-		mtx.unlock();
+
+		inputImgArr.push_back(inputImgReal);
+
 		frameNumReal++;
 	}
 }
 
-void BirdEyeView()
+void BirdEyeView(map<string, int> mask_points, int real_width, int real_height)
 {
 	// x_lb = 120, y_lb = 550;
 	// x_rb = width, y_rb = 550;
@@ -276,10 +141,10 @@ void BirdEyeView()
 
 	// The 4-points at the input image	
 	vector<Point2f> origPoints;
-	origPoints.push_back(Point2f(x_lb, y_lb)); //kiri bawah
-	origPoints.push_back(Point2f(x_rb, y_rb)); //kanan bawah
-	origPoints.push_back(Point2f(x_rt, y_rt)); //kanan atas
-	origPoints.push_back(Point2f(x_lt, y_lt)); //kiri atas
+	origPoints.push_back(Point2f(mask_points["x_lb"], mask_points["y_lb"])); //kiri bawah
+	origPoints.push_back(Point2f(mask_points["x_rb"], mask_points["y_rb"])); //kanan bawah
+	origPoints.push_back(Point2f(mask_points["x_rt"], mask_points["y_rt"])); //kanan atas
+	origPoints.push_back(Point2f(mask_points["x_lt"], mask_points["y_lt"])); //kiri atas
 
 	// The 4-points correspondences in the destination image
 	vector<Point2f> dstPoints;
@@ -300,13 +165,13 @@ void BirdEyeView()
 * @brief Trackbar callback - Canny thresholds input with a ratio 1:3
 */
 
-void CannyEdge(int, void*)
+void CannyEdge(int, void*, int lowThreshold, int max_lowThreshold)
 {
 	/// Reduce noise with a kernel 3x3
 	blur(src_gray, detected_edges, Size(3, 3));
 
 	/// Canny detector
-	Canny(detected_edges, detected_edges, lowThreshold, max_lowThreshold, kernel_size);
+	cv::Canny(detected_edges, detected_edges, lowThreshold, max_lowThreshold, kernel_size);
 
 	/// Using Canny's output as a mask, we display our result
 	dst = Scalar::all(0);
@@ -317,7 +182,7 @@ void CannyEdge(int, void*)
 	// imshow("Canny Edge", detected_edges);
 }
 
-void MorphologicalClosing() 
+void MorphologicalClosing(int interation) 
 {
 	Point anchor = Point(-1,-1);
 	Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3, 3), anchor);
@@ -350,18 +215,18 @@ void FloodFill()
 	}
 
 	Mat im_floodfill_inv;
-    bitwise_not(flood_fill, im_floodfill_inv);
+    cv::bitwise_not(flood_fill, im_floodfill_inv);
 	flood_fill = (im_th | im_floodfill_inv);
 
 	// namedWindow("Flood Fill", WINDOW_NORMAL);
 	// imshow("Flood Fill", flood_fill);
 }
 
-void CalculateDensity()
+void CalculateDensity(int real_width, int real_height)
 {
 	int count_white = countNonZero(flood_fill);
 	density = count_white/(real_width*20*real_height*20);
-	cout << endl <<"Density : " << density << endl;
+	std::cout << endl <<"Density : " << density << endl;
 }
 
 void ShiTomasiCorner()
@@ -419,7 +284,7 @@ void LucasKanade()
 			}
 		}
 		speed = (totalSpeed/(float)count);
-		cout << "Speed : " << speed << endl;
+		std::cout << "Speed : " << speed << endl;
 		
 		// RNG rng(12345);
 		// for(size_t i = 0; i < prevPts.size(); i++)
@@ -433,62 +298,70 @@ void LucasKanade()
 	}
 }
 
-void TrafficState(int camera_id)
+void TrafficState(ServerWriter<HelloReply>* writer)
 {	
 	if (density < 0.5) {
-		// change traffic state
-		traffic_state = "Lancar";
-		// store data
-		StoreDensityData(camera_id, traffic_state);
+		// output stream
+		HelloReply r;
+		r.set_response("Lancar");
+		writer->Write(r);
 		// output to console
 		// cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
-		// change traffic state
-		traffic_state = "Ramai Lancar";
-		// store data
-		StoreDensityData(camera_id, traffic_state);
+		// output stream
+		HelloReply r;
+		r.set_response("Ramai Lancar");
+		writer->Write(r);
+
 		// output to console
 		// cout << "Ramai Lancar" << endl << endl;
 	} else {
-		// change traffic state
-		traffic_state = "Padat";
-		// store data
-		StoreDensityData(camera_id, traffic_state);
+		// output stream
+		HelloReply r;
+		r.set_response("Padat");
+		writer->Write(r);
+
 		// output to console
 		// cout << "Padat" << endl << endl;
 	}
 }
 
-void Run(int camera_id){
-
+void RunService(
+	ServerWriter<HelloReply>* writer,
+	int real_width,
+	int real_height,
+	map<string, int> mask_points,
+	int edge_thresh,
+	int low_thresh,
+	int max_thresh,
+	int morph_iteration)
+{
 	// Main loop
-	cout << "run 1, camera " << camera_id << endl;
 	for (; ; )
 	{
-		cout << "run 2, camera " << camera_id << endl;
-		if (inputImgReal[camera_id].empty() && frameNum != 0){ break;}
-		if (inputImgReal[camera_id].empty()){ continue;}
+		if (inputImgReal.empty() && frameNum != 0){ break;}
+		if (inputImgReal.empty()){ continue;}
 
 		if (frameNumReal>1) {
-			inputImgReal[camera_id].copyTo(inputImg);
-			inputImgArr[camera_id][frameNumReal-2].copyTo(prevImg);
+			inputImgReal.copyTo(inputImg);
+			inputImgArr[frameNumReal-2].copyTo(prevImg);
 		} else if (frameNumReal <= 1) {
-			inputImgReal[camera_id].copyTo(inputImg);
-			inputImgReal[camera_id].copyTo(prevImg);
+			inputImgReal.copyTo(inputImg);
+			inputImgReal.copyTo(prevImg);
 		}
 		frameNum++;
-		cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
+		std::cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
 
 		// Bird Eye View First
 		bird_eye_view = prevImg;
-		BirdEyeView();
+		BirdEyeView(mask_points, real_width, real_height);
 		prevImg = bird_eye_view;
-		cvtColor(prevImg, prevImg, CV_BGR2GRAY);
+		cv::cvtColor(prevImg, prevImg, CV_BGR2GRAY);
 
 		// Bird Eye View Second
 		bird_eye_view = inputImg;
 		
-		BirdEyeView();
+		BirdEyeView(mask_points, real_width, real_height);
 
 		//canny edge detector
 		/// Load an image
@@ -498,7 +371,7 @@ void Run(int camera_id){
 		dst.create(src.size(), src.type());
 
 		/// Convert the image to grayscale
-		cvtColor(src, src_gray, CV_BGR2GRAY);
+		cv::cvtColor(src, src_gray, CV_BGR2GRAY);
 
 		/// Create a window
 		// namedWindow("Canny Edge", WINDOW_NORMAL);
@@ -507,16 +380,16 @@ void Run(int camera_id){
 		// createTrackbar("Min Threshold:", "Canny Edge", &lowThreshold, max_lowThreshold, CannyEdge);
 
 		/// Run Canny
-		CannyEdge(0,0);
+		CannyEdge(0, 0, low_thresh, max_thresh);
 
 		/// Run Morph closing
-		MorphologicalClosing();
+		MorphologicalClosing(morph_iteration);
 
 		/// Run Flood Fill
 		FloodFill();
 
 		// Calculate density
-		CalculateDensity();
+		CalculateDensity(real_width, real_height);
 
 		// Shi Tomasi Corner Detection
 		ShiTomasiCorner();
@@ -525,11 +398,11 @@ void Run(int camera_id){
 		LucasKanade();
 
 		// Traffic State
-		TrafficState(camera_id);
+		TrafficState(writer);
 
 		// View
 		namedWindow("Input", WINDOW_NORMAL);
-		imshow("Input", inputImg);
+		cv::imshow("Input", inputImg);
 
 		// namedWindow("Output", WINDOW_NORMAL);
 		// imshow("Output", outputImg);
@@ -541,17 +414,28 @@ class GreeterServiceImpl final : public Greeter::Service {
 	Status SayHello(ServerContext* context,
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
-		// get request id
-		// select date and density_state from database
-		// send message date and density state
-		HelloReply r;
-		for (; ; )
-		{
-			vector<string> response = GetDensityByID(request->id());
-			r.set_timestamp(response[0]);
-			r.set_response(response[1]);
-			writer->Write(r);
-		}
+
+		Model model;
+		map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
+		cameraConfig = model.getCameraConfig(request->id());
+		
+		thread tGetFrame (GetFrame,boost::get<string>(cameraConfig["url"]));
+
+		thread tRunService( 
+			RunService,
+			writer,
+			boost::get<int>(cameraConfig["real_width"]),
+			boost::get<int>(cameraConfig["real_height"]),
+			boost::get< map<string, int> >(cameraConfig["mask_points"]),
+			boost::get<int>(cameraConfig["edge_thresh"]),
+			boost::get<int>(cameraConfig["low_thresh"]),
+			boost::get<int>(cameraConfig["max_thresh"]),
+			boost::get<int>(cameraConfig["morph_iteration"])
+		);
+
+		tGetFrame.join();
+		tRunService.join();
+
 	  	return Status::OK;
 	}
 };
@@ -577,27 +461,7 @@ void RunServer() {
 
 int main(int _argc, char** _argv)
 {
-	vector< map<string, boost::variant<int, string>> > cameras = GetCameras();
-	thread tGetFrame[cameras.size()];
-	thread tRun[cameras.size()];
-	// thread tRunServer[cameras.size()];
-
-	for (int i = 0; i < cameras.size(); ++i){
-		cout << "done 1, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
-		tGetFrame[i] = thread (GetFrame,boost::get<int>(cameras[i]["camera_id"]),boost::get<string>(cameras[i]["url"]));
-		cout << "done 2, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
-		tRun[i] = thread (Run, boost::get<int>(cameras[i]["camera_id"]));
-		cout << "done 3, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
-		// tRunServer[i] = thread (RunServer);
-	}
-	thread tRunServer (RunServer);
-	cout << "done 4" << endl;
-	for (int i = 0; i < cameras.size(); ++i){
-		tGetFrame[i].join();
-		tRun[i].join();
-		// tRunServer[i].join();
-	}
-	tRunServer.join();
+	RunServer();
 
 	return 0;
 }
