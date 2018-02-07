@@ -39,6 +39,7 @@
         "mutex": "cpp",
         "ratio": "cpp",
         "thread": "cpp",
-        "tuple": "cpp"
+        "tuple": "cpp",
+        "*.ipp": "cpp"
     }
 }

@@ -10,6 +10,12 @@
 * Date:	 22/02/2014
 * Homepage: http://marcosnietoblog.wordpress.com/
 */
+#include "mysql_connection.h"
+
+#include <cppconn/driver.h>
+#include <cppconn/exception.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -25,6 +31,9 @@
 #include <ctime>
 #include <memory>
 #include <string>
+#include <vector>
+#include <map>
+#include "boost/variant.hpp"
 
 #include "helloworld.grpc.pb.h"
 
@@ -41,10 +50,13 @@ using helloworld::HelloRequest;
 using helloworld::HelloReply;
 using helloworld::Greeter;
 
+mutex mtx;
+
 // configuration
 int frameNumReal = 0;
-vector<Mat> inputImgArr;
-Mat inputImg, inputImgReal;
+vector< vector<Mat> > inputImgArr;
+vector<Mat> inputImgReal;
+Mat inputImg;
 
 // 1. Window and Video Information
 Mat src, src_gray;
@@ -96,9 +108,124 @@ float speed;
 // 9. Traffic State
 String traffic_state;
 
-void GetFrame()
+//////////////////////////////////////////////////////////////////////
+
+vector<string> GetDensityByID(int camera_id) {
+	// Input : camera_id
+	// Output : time, density
+	vector<string> response;
+	try {
+		sql::Driver *driver;
+		sql::Connection *con;
+		sql::Statement *stmt;
+		sql::ResultSet *res;
+	  
+		/* Create a connection */
+		driver = get_driver_instance();
+		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		/* Connect to the MySQL test database */
+		con->setSchema("density");
+	  
+		stmt = con->createStatement();
+		ostringstream query;
+		query << "SELECT * FROM `density_history` WHERE `camera_id` = " << camera_id << " ORDER BY `date_time` DESC LIMIT 1";
+		res = stmt->executeQuery(query.str());
+		while (res->next()) {
+			response.push_back(res->getString("date_time"));
+			response.push_back(res->getString("density_state"));
+		}
+		delete res;
+		delete stmt;
+		delete con;
+	  
+	  } catch (sql::SQLException &e) {
+		cout << "# ERR: SQLException in " << __FILE__;
+		cout << "# ERR: " << e.what();
+		cout << " (MySQL error code: " << e.getErrorCode();
+		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
+	  }
+
+	  return response;
+}
+
+void StoreDensityData(int camera_id, string density_state) {
+	// Input : id, density_data
+	// Output : -
+	try {
+		sql::Driver *driver;
+		sql::Connection *con;
+		sql::Statement *stmt;
+	  
+		/* Create a connection */
+		driver = get_driver_instance();
+		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		/* Connect to the MySQL test database */
+		con->setSchema("density");
+	  
+		stmt = con->createStatement();
+		ostringstream query;
+		query << "INSERT INTO `density_history`(`camera_id`, `density_state`) VALUES ("<< camera_id <<",'Padat')";
+		stmt->execute(query.str());
+		
+		delete stmt;
+		delete con;
+	  
+	  } catch (sql::SQLException &e) {
+		cout << "# ERR: SQLException in store density, " << __FILE__;
+		cout << "# ERR: " << e.what();
+		cout << " (MySQL error code: " << e.getErrorCode();
+		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
+	  }
+	
+}
+
+vector< map<string, boost::variant<int, string>> > GetCameras() {
+	// Input : -
+	// Output : Array of Map
+	vector< map<string, boost::variant<int, string>> > cameras;
+	try {
+		sql::Driver *driver;
+		sql::Connection *con;
+		sql::Statement *stmt;
+		sql::ResultSet *res;
+	  
+		/* Create a connection */
+		driver = get_driver_instance();
+		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		/* Connect to the MySQL test database */
+		con->setSchema("camera");
+	  
+		stmt = con->createStatement();
+		res = stmt->executeQuery("SELECT * FROM `camera`");
+		while (res->next()) {
+		  /* Access column data by alias or column name */
+			map<string, boost::variant<int, string>> data;
+			data["camera_id"] = res->getInt("camera_id");
+			data["url"] = res->getString("url");
+			
+			cameras.push_back(data);
+		}
+		
+		delete res;
+		delete stmt;
+		delete con;
+	  
+	  } catch (sql::SQLException &e) {
+		cout << "# ERR: SQLException in " << __FILE__;
+		cout << "# ERR: " << e.what();
+		cout << " (MySQL error code: " << e.getErrorCode();
+		cout << ", SQLState: " << e.getSQLState() << " )" << endl;
+	  }
+	  
+	  return cameras;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void GetFrame(int camera_id, string url)
 {
-	VideoCapture cap("http://127.0.0.1:5000/video_feed");
+	VideoCapture cap(url);
+
 	if (cap.isOpened()){
 		// Show video information
 		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
@@ -111,11 +238,13 @@ void GetFrame()
 	for (;;) 
 	{
 		// Get current image
-		cap >> inputImgReal;
-		if (inputImgReal.empty())
+		mtx.lock();
+		cap >> inputImgReal[camera_id];
+		mtx.unlock();
+		if (inputImgReal[camera_id].empty())
 		{
 			cout << "Input image empty" << endl;
-			cap.open("http://127.0.0.1:5000/video_feed");
+			cap.open(url);
 			if (cap.isOpened()){
 				// Show video information
 				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
@@ -127,7 +256,9 @@ void GetFrame()
 			}
 			continue;
 		}
-		inputImgArr.push_back(inputImgReal);
+		mtx.lock();
+		inputImgArr[camera_id].push_back(inputImgReal[camera_id]);
+		mtx.unlock();
 		frameNumReal++;
 	}
 }
@@ -302,40 +433,48 @@ void LucasKanade()
 	}
 }
 
-void TrafficState()
+void TrafficState(int camera_id)
 {	
 	if (density < 0.5) {
 		// change traffic state
 		traffic_state = "Lancar";
+		// store data
+		StoreDensityData(camera_id, traffic_state);
 		// output to console
-		cout << "Lancar" << endl << endl;
+		// cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
 		// change traffic state
 		traffic_state = "Ramai Lancar";
+		// store data
+		StoreDensityData(camera_id, traffic_state);
 		// output to console
-		cout << "Ramai Lancar" << endl << endl;
+		// cout << "Ramai Lancar" << endl << endl;
 	} else {
 		// change traffic state
 		traffic_state = "Padat";
+		// store data
+		StoreDensityData(camera_id, traffic_state);
 		// output to console
-		cout << "Padat" << endl << endl;
+		// cout << "Padat" << endl << endl;
 	}
 }
 
-void Run(){
+void Run(int camera_id){
 
 	// Main loop
+	cout << "run 1, camera " << camera_id << endl;
 	for (; ; )
 	{
-		if (inputImgReal.empty() && frameNum != 0){break;}
-		if (inputImgReal.empty()){continue;}
+		cout << "run 2, camera " << camera_id << endl;
+		if (inputImgReal[camera_id].empty() && frameNum != 0){ break;}
+		if (inputImgReal[camera_id].empty()){ continue;}
 
 		if (frameNumReal>1) {
-			inputImgReal.copyTo(inputImg);
-			inputImgArr[frameNumReal-2].copyTo(prevImg);
+			inputImgReal[camera_id].copyTo(inputImg);
+			inputImgArr[camera_id][frameNumReal-2].copyTo(prevImg);
 		} else if (frameNumReal <= 1) {
-			inputImgReal.copyTo(inputImg);
-			inputImgReal.copyTo(prevImg);
+			inputImgReal[camera_id].copyTo(inputImg);
+			inputImgReal[camera_id].copyTo(prevImg);
 		}
 		frameNum++;
 		cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
@@ -386,7 +525,7 @@ void Run(){
 		LucasKanade();
 
 		// Traffic State
-		TrafficState();
+		TrafficState(camera_id);
 
 		// View
 		namedWindow("Input", WINDOW_NORMAL);
@@ -402,11 +541,15 @@ class GreeterServiceImpl final : public Greeter::Service {
 	Status SayHello(ServerContext* context,
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
-		
+		// get request id
+		// select date and density_state from database
+		// send message date and density state
 		HelloReply r;
 		for (; ; )
 		{
-			r.set_message(traffic_state);
+			vector<string> response = GetDensityByID(request->id());
+			r.set_timestamp(response[0]);
+			r.set_response(response[1]);
 			writer->Write(r);
 		}
 	  	return Status::OK;
@@ -434,13 +577,27 @@ void RunServer() {
 
 int main(int _argc, char** _argv)
 {
-	thread first (GetFrame);
-	thread second (Run);
-	thread third (RunServer);
+	vector< map<string, boost::variant<int, string>> > cameras = GetCameras();
+	thread tGetFrame[cameras.size()];
+	thread tRun[cameras.size()];
+	// thread tRunServer[cameras.size()];
 
-	first.join();
-	second.join();
-	third.join();
-	
+	for (int i = 0; i < cameras.size(); ++i){
+		cout << "done 1, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
+		tGetFrame[i] = thread (GetFrame,boost::get<int>(cameras[i]["camera_id"]),boost::get<string>(cameras[i]["url"]));
+		cout << "done 2, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
+		tRun[i] = thread (Run, boost::get<int>(cameras[i]["camera_id"]));
+		cout << "done 3, camera " << boost::get<int>(cameras[i]["camera_id"]) << endl;
+		// tRunServer[i] = thread (RunServer);
+	}
+	thread tRunServer (RunServer);
+	cout << "done 4" << endl;
+	for (int i = 0; i < cameras.size(); ++i){
+		tGetFrame[i].join();
+		tRun[i].join();
+		// tRunServer[i].join();
+	}
+	tRunServer.join();
+
 	return 0;
 }
