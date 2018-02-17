@@ -36,6 +36,7 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
         con->setSchema("density");
         
         stmt = con->createStatement();
+        query.str("");
         query << "SELECT * FROM `configuration` WHERE `camera_id` = " << id;
 		res = stmt->executeQuery(query.str());
         while (res->next()) {
@@ -49,8 +50,9 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
             camera["morph_teration"] = res->getInt("morph_closing_iteration");
         }
 
+        query.str("");
         query << "SELECT * FROM `street_mask_points` WHERE `mask_points_id` = " << mask_points_id;
-		res = stmt->executeQuery(query.str());
+        res = stmt->executeQuery(query.str());
         while (res->next()) {
         /* Access column data by alias or column name */
             map<string, int> data;

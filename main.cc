@@ -28,7 +28,7 @@
 #include <vector>
 #include <map>
 #include "boost/variant.hpp"
-#include "helloworld.grpc.pb.h"
+#include "densityContract.grpc.pb.h"
 
 #include "IPM.h"
 #include "Model.h"
@@ -40,9 +40,9 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::ServerWriter;
 using grpc::Status;
-using helloworld::HelloRequest;
-using helloworld::HelloReply;
-using helloworld::Greeter;
+using densityContract::HelloRequest;
+using densityContract::HelloReply;
+using densityContract::Greeter;
 
 // configuration
 int frameNumReal = 0;
@@ -100,7 +100,7 @@ void GetFrame(string url)
 		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
 		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 
-		std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+		// std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 	}
 	for (;;) 
 	{
@@ -117,7 +117,7 @@ void GetFrame(string url)
 				fps = static_cast<int>(cap.get(CAP_PROP_FPS));
 				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 	
-				std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+				// std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
 			}
 			continue;
 		}
@@ -226,7 +226,7 @@ void CalculateDensity(int real_width, int real_height)
 {
 	int count_white = countNonZero(flood_fill);
 	density = count_white/(real_width*20*real_height*20);
-	std::cout << endl <<"Density : " << density << endl;
+	// std::cout << endl <<"Density : " << density << endl;
 }
 
 void ShiTomasiCorner()
@@ -284,7 +284,7 @@ void LucasKanade()
 			}
 		}
 		speed = (totalSpeed/(float)count);
-		std::cout << "Speed : " << speed << endl;
+		// std::cout << "Speed : " << speed << endl;
 		
 		// RNG rng(12345);
 		// for(size_t i = 0; i < prevPts.size(); i++)
@@ -350,7 +350,7 @@ void RunService(
 			inputImgReal.copyTo(prevImg);
 		}
 		frameNum++;
-		std::cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
+		// std::cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
 
 		// Bird Eye View First
 		bird_eye_view = prevImg;
