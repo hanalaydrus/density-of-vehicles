@@ -401,8 +401,8 @@ void RunService(
 		TrafficState(writer);
 
 		// View
-		namedWindow("Input", WINDOW_NORMAL);
-		cv::imshow("Input", inputImg);
+		// namedWindow("Input", WINDOW_NORMAL);
+		// cv::imshow("Input", inputImg);
 
 		// namedWindow("Output", WINDOW_NORMAL);
 		// imshow("Output", outputImg);
@@ -415,26 +415,31 @@ class GreeterServiceImpl final : public Greeter::Service {
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
 
-		Model model;
-		map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
-		cameraConfig = model.getCameraConfig(request->id());
+		// Model model;
+		// map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
+		// cameraConfig = model.getCameraConfig(request->id());
 		
-		thread tGetFrame (GetFrame,boost::get<string>(cameraConfig["url"]));
+		// thread tGetFrame (GetFrame,boost::get<string>(cameraConfig["url"]));
 
-		thread tRunService( 
-			RunService,
-			writer,
-			boost::get<int>(cameraConfig["real_width"]),
-			boost::get<int>(cameraConfig["real_height"]),
-			boost::get< map<string, int> >(cameraConfig["mask_points"]),
-			boost::get<int>(cameraConfig["edge_thresh"]),
-			boost::get<int>(cameraConfig["low_thresh"]),
-			boost::get<int>(cameraConfig["max_thresh"]),
-			boost::get<int>(cameraConfig["morph_iteration"])
-		);
+		// thread tRunService( 
+		// 	RunService,
+		// 	writer,
+		// 	boost::get<int>(cameraConfig["real_width"]),
+		// 	boost::get<int>(cameraConfig["real_height"]),
+		// 	boost::get< map<string, int> >(cameraConfig["mask_points"]),
+		// 	boost::get<int>(cameraConfig["edge_thresh"]),
+		// 	boost::get<int>(cameraConfig["low_thresh"]),
+		// 	boost::get<int>(cameraConfig["max_thresh"]),
+		// 	boost::get<int>(cameraConfig["morph_iteration"])
+		// );
 
-		tGetFrame.join();
-		tRunService.join();
+		// tGetFrame.join();
+		// tRunService.join();
+		for (;;){
+			HelloReply r;
+			r.set_response("Ramai Lancar");
+			writer->Write(r);
+		}
 
 	  	return Status::OK;
 	}
