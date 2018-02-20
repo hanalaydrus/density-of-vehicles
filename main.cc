@@ -89,45 +89,6 @@ String traffic_state;
 
 //////////////////////////////////////////////////////////////////////
 
-void GetFrame(string url)
-{
-	VideoCapture cap(url);
-
-	if (cap.isOpened()){
-		// Show video information
-		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
-		fps = static_cast<int>(cap.get(CAP_PROP_FPS));
-		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
-
-		// std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
-	}
-	for (;;) 
-	{
-		// Get current image
-		cap >> inputImgReal;
-		if (inputImgReal.empty())
-		{
-			std::cout << "Input image empty" << endl;
-			cap.open(url);
-			if (cap.isOpened()){
-				// Show video information
-				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
-				fps = static_cast<int>(cap.get(CAP_PROP_FPS));
-				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
-	
-				// std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
-			}
-			continue;
-		}
-
-		inputImgArr.push_back(inputImgReal);
-
-		frameNumReal++;
-	}
-}
-
 void BirdEyeView(map<string, int> mask_points, int real_width, int real_height)
 {
 	// x_lb = 120, y_lb = 550;
@@ -298,36 +259,25 @@ void LucasKanade()
 	}
 }
 
-void TrafficState(ServerWriter<HelloReply>* writer)
+void TrafficState()
 {	
 	if (density < 0.5) {
-		// output stream
-		HelloReply r;
-		r.set_response("Lancar");
-		writer->Write(r);
+
 		// output to console
-		// cout << "Lancar" << endl << endl;
+		cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
-		// output stream
-		HelloReply r;
-		r.set_response("Ramai Lancar");
-		writer->Write(r);
 
 		// output to console
-		// cout << "Ramai Lancar" << endl << endl;
+		cout << "Ramai Lancar" << endl << endl;
 	} else {
-		// output stream
-		HelloReply r;
-		r.set_response("Padat");
-		writer->Write(r);
 
 		// output to console
-		// cout << "Padat" << endl << endl;
+		cout << "Padat" << endl << endl;
 	}
 }
 
 void RunService(
-	ServerWriter<HelloReply>* writer,
+	string url,
 	int real_width,
 	int real_height,
 	map<string, int> mask_points,
@@ -339,19 +289,26 @@ void RunService(
 	// Main loop
 	for (; ; )
 	{
-		if (inputImgReal.empty() && frameNum != 0){ break;}
-		if (inputImgReal.empty()){ continue;}
 
-		if (frameNumReal>1) {
-			inputImgReal.copyTo(inputImg);
-			inputImgArr[frameNumReal-2].copyTo(prevImg);
-		} else if (frameNumReal <= 1) {
-			inputImgReal.copyTo(inputImg);
-			inputImgReal.copyTo(prevImg);
+		VideoCapture cap(url);
+
+		cap >> prevImg;
+		cap >> inputImg;
+
+		if (!prevImg.empty() || !inputImg.empty()){
+
+			// Show video information
+			width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+			height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+			fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+			fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
+	
+			// std::cout << "Input video: (" << width << "x" << height << ") at " << fps << ", fourcc = " << fourcc << endl;
+		} else {
+			std::cout << "Input image empty" << endl;
+			continue;
 		}
-		frameNum++;
-		// std::cout << "FRAME : " << frameNum << " REAL : " << frameNumReal << endl;
-
+		
 		// Bird Eye View First
 		bird_eye_view = prevImg;
 		BirdEyeView(mask_points, real_width, real_height);
@@ -398,11 +355,11 @@ void RunService(
 		LucasKanade();
 
 		// Traffic State
-		TrafficState(writer);
+		TrafficState();
 
 		// View
-		// namedWindow("Input", WINDOW_NORMAL);
-		// cv::imshow("Input", inputImg);
+		namedWindow("Input", WINDOW_NORMAL);
+		cv::imshow("Input", inputImg);
 
 		// namedWindow("Output", WINDOW_NORMAL);
 		// imshow("Output", outputImg);
@@ -417,7 +374,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 
 		// Model model;
 		// map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
-		// cameraConfig = model.getCameraConfig(request->id());
+		// cameraConfig = model.getCameraConfig(1);
 		
 		// thread tGetFrame (GetFrame,boost::get<string>(cameraConfig["url"]));
 
@@ -466,7 +423,27 @@ void RunServer() {
 
 int main(int _argc, char** _argv)
 {
-	RunServer();
+	Model model;
+	map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
+	cameraConfig = model.getCameraConfig(1);
+	
+	// thread tGetFrame (GetFrame,boost::get<string>(cameraConfig["url"]));
+
+	thread tRunService( 
+		RunService,
+		boost::get<string>(cameraConfig["url"]),
+		boost::get<int>(cameraConfig["real_width"]),
+		boost::get<int>(cameraConfig["real_height"]),
+		boost::get< map<string, int> >(cameraConfig["mask_points"]),
+		boost::get<int>(cameraConfig["edge_thresh"]),
+		boost::get<int>(cameraConfig["low_thresh"]),
+		boost::get<int>(cameraConfig["max_thresh"]),
+		boost::get<int>(cameraConfig["morph_iteration"])
+	);
+
+	// tGetFrame.join();
+	tRunService.join();
+	// RunServer();
 
 	return 0;
 }
