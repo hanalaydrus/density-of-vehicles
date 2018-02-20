@@ -173,7 +173,7 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
             camera["edge_thresh"] = res->getInt("edge_threshold");
             camera["low_thresh"] = res->getInt("low_threshold");
             camera["max_thresh"] = res->getInt("max_threshold");
-            camera["morph_teration"] = res->getInt("morph_closing_iteration");
+            camera["morph_iteration"] = res->getInt("morph_closing_iteration");
         }
 
         query.str("");
