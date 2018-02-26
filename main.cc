@@ -316,6 +316,7 @@ float CountFPS(VideoCapture cap){
 }
 
 void RunService(
+	ServerContext* context,
 	ServerWriter<HelloReply>* writer,
 	string url,
 	int real_width,
@@ -415,6 +416,10 @@ void RunService(
 		writer->Write(r);
 
 		waitKey(1);
+		
+		if (context->IsCancelled()){
+			break;
+		}
 	}
 }
 
@@ -429,6 +434,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 		
 		thread tRunService( 
 			RunService,
+			context,
 			writer,
 			boost::get<string>(cameraConfig["url"]),
 			boost::get<int>(cameraConfig["real_width"]),
