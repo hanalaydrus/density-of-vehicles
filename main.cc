@@ -44,32 +44,6 @@ using densityContract::HelloRequest;
 using densityContract::HelloReply;
 using densityContract::Greeter;
 
-// 1. Window and Video Information
-
-
-
-// 2. Bird Eye View
-
-
-// 3. Canny Edge
-
-
-// 4. Morphological Closing
-
-
-// 5. Flood Fill
-
-
-// 6. Count Density
-
-
-// 7. Shi Tomasi
-
-
-// 8. Lucas Kanade Tracker
-
-// 9. Traffic State
-
 
 //////////////////////////////////////////////////////////////////////
 
@@ -134,7 +108,7 @@ Mat CannyEdge(int, void*, Mat input_image, int low_threshold, int max_lowThresho
 
 	/// Reduce noise with a kernel 3x3
 	blur(input_image, detected_edges, Size(3, 3));
-
+ 
 	/// Canny detector
 	cv::Canny(detected_edges, detected_edges, low_threshold, max_lowThreshold, kernel_size);
 
@@ -196,8 +170,9 @@ float CalculateDensity(Mat input_image, int real_width, int real_height)
 {
 	float density = 0;
 	int count_white = countNonZero(input_image);
-	density = count_white/(real_width*20*real_height*20);
-	// std::cout << endl <<"Density : " << density << endl;
+	// std::cout << endl <<"count white : " << count_white << endl;
+	density = (float) count_white / (float) (real_width*20*real_height*20);
+	std::cout << endl <<"Density : " << density << endl;
 	return density;
 }
 
@@ -234,8 +209,8 @@ float LucasKanade(Mat input_img_gray, Mat prev_img_gray, vector<Point2f> prevPts
 	vector<uchar> status;
 	vector<float> err;
 	double distance;
-	float duration;
-	float speed, oneSpeed, totalSpeed;
+	double duration;
+	double speed, oneSpeed, totalSpeed;
 	TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
 	int count = 0;
 
@@ -244,34 +219,45 @@ float LucasKanade(Mat input_img_gray, Mat prev_img_gray, vector<Point2f> prevPts
 		calcOpticalFlowPyrLK(prev_img_gray, input_img_gray, prevPts, nextPts, status, err, Size(11,22), 3, termcrit, 0, 0.001);
 		
 		// Count Average Speed
-		duration = ((float)(1)/(float)fps);
+		duration = ((double)(1)/(double)fps);
 		// cout << "Duration : " << nextFrameNum << "-"<< prevFrameNum << "/" << fps << endl;
 		// cout << "Duration : " << duration << endl;
+		// cout << "FPS : " << fps << endl;
 
 		for (size_t i = 0; i < nextPts.size(); i++)
 		{
 			if (status[i] == 1) {
 				distance = ((nextPts[i].y-prevPts[i].y)/20);
 				// cout << "Distance : " << distance << endl;
-				oneSpeed = ((float)distance/duration);
+				oneSpeed = ((double)distance/duration);
 				// cout << "OneSpeed : " << oneSpeed << endl;
-				if (oneSpeed < 0){oneSpeed = 0;}
-				totalSpeed += oneSpeed;
-				count++;
+				if (oneSpeed >= 0){
+					totalSpeed += oneSpeed;
+					count++;
+				}
 			}
 		}
-		speed = (totalSpeed/(float)count);
-		// std::cout << "Speed : " << speed << endl;
+		// std::cout << "Total Speed : " << totalSpeed << endl;
+		std::cout << "Count : " << count << endl;
+		if (count <= 0){
+			speed = 0;
+		} else {
+			speed = (totalSpeed/(double)count);
+		}
+		std::cout << "Speed : " << speed << endl;
 		
-		// RNG rng(12345);
-		// for(size_t i = 0; i < prevPts.size(); i++)
-		// {
-		// 	Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
-		// 	circle(src, prevPts[i], 8, color, 2, 8, 0);
-		// 	circle(src, nextPts[i], 8, color, 2, 8, 0);
-		// }
+		RNG rng(12345);
+		for(size_t i = 0; i < prevPts.size(); i++)
+		{
+			Scalar color = Scalar(rng.uniform(0,255), rng.uniform(0, 255), rng.uniform(0, 255));
+			circle(prev_img_gray, prevPts[i], 8, color, 2, 8, 0);
+			circle(input_img_gray, nextPts[i], 8, color, 2, 8, 0);
+		}
+		// namedWindow("Lucas Kanade Prev", WINDOW_NORMAL);
+		// imshow("Lucas Kanade Prev", prev_img_gray);
+
 		// namedWindow("Lucas Kanade", WINDOW_NORMAL);
-		// imshow("Lucas Kanade", src);
+		// imshow("Lucas Kanade", input_img_gray);
 
 		return speed;
 	}
@@ -340,8 +326,13 @@ void RunService(
 	VideoCapture cap(url);
 	if (cap.isOpened()){
 		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
+		std::cout << "width: " << width << endl;
 		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
+		std::cout << "height: " << height << endl;
 		fps = CountFPS(cap);
+		if (isinf(fps)) {
+			fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+		}
 		fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 	}
 
@@ -360,6 +351,9 @@ void RunService(
 				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
 				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
 				fps = CountFPS(cap);
+				if (isinf(fps)) {
+					fps = static_cast<int>(cap.get(CAP_PROP_FPS));
+				}
 				fourcc = static_cast<int>(cap.get(CAP_PROP_FOURCC));
 			}
 
@@ -465,7 +459,7 @@ void RunServer() {
 	// Finally assemble the server.
 	std::unique_ptr<Server> server(builder.BuildAndStart());
 	std::cout << "Server listening on " << server_address << std::endl;
-  
+
 	// Wait for the server to shutdown. Note that some other thread must be
 	// responsible for shutting down the server for this call to ever return.
 	server->Wait();
