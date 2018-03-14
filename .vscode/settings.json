@@ -41,6 +41,8 @@
         "thread": "cpp",
         "tuple": "cpp",
         "*.ipp": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "cstdarg": "cpp",
+        "__config": "cpp"
     }
 }
