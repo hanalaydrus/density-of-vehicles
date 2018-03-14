@@ -27,16 +27,16 @@ spec:
   template:
     metadata:
       labels:
-        app: authservice
+        app: densityservice
         tier: backend
         phase: beta
         version: v1
     spec:
       containers:
-      - name: authservice
+      - name: densityservice
         image: asia.gcr.io/tugas-akhir-hana/density-vehicle:v1
         ports:
-        - name: grpc-auth
+        - name: grpc-density
           containerPort: 9221
 
       restartPolicy: Always

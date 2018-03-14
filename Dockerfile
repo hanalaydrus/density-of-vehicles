@@ -1,4 +1,4 @@
-FROM alpine:latest
-COPY ./main /main
-RUN chmod +x /main
-CMD ["./main"]
+FROM gcc:4.9
+
+COPY . /app
+WORKDIR /app
