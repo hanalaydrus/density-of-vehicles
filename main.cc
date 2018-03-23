@@ -348,6 +348,7 @@ void RunService(
 
 			cap.open(url);
 			if (cap.isOpened()){
+				std::cout << "Opeen " << height << endl;
 				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
 				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
 				fps = CountFPS(cap);
@@ -425,6 +426,8 @@ class GreeterServiceImpl final : public Greeter::Service {
 		Model model;
 		map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
 		cameraConfig = model.getCameraConfig(request->id());
+		cout << "Id: " << request->id() << endl;
+		cout << "url: " << boost::get<string>(cameraConfig["url"]) << endl;
 		
 		thread tRunService( 
 			RunService,
@@ -471,6 +474,18 @@ int main(int _argc, char** _argv)
 	thread tRunServer(RunServer);
 
 	tRunServer.join();
+
+	// map<string, int> data;
+	// data["x_lb"] = 365;
+	// data["x_lt"] = 300;
+	// data["x_rb"] = 545;
+	// data["x_rt"] = 703;
+	// data["y_lb"] = 295;
+	// data["y_lt"] = 540;
+	// data["y_rb"] = 275;
+	// data["y_rt"] = 490;
+
+	// RunService("http://localhost:5002/video_feed", 8, 16, data, 1, 0, 100, 7);
 
 	return 0;
 }
