@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  db-density:
+    image: mariadb:10.3
+    container_name: db-density
+    volumes:
+      - container-volume:/var/lib/mysql
+      - ./density.sql:/docker-entrypoint-initdb.d/density.sql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: density
+    restart: always
+
+  phpmyadmin-density:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin-density
+    links:
+      - db-density
+    ports:
+      - "9001:80"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      PMA_HOST: db-density:3306
+    restart: always
+
+  density-service:
+    build: .
+    container_name: density-service
+    depends_on:
+      - db-density
+    links:
+      - db-density
+    external_links:
+      - camera-service
+      - traffic-streaming-service
+#    ports:
+#      - "50050:50050"
+    environment:
+      DB_HOST: "db-density"
+      DB_PORT: "3306"
+      DB_NAME: "density"
+      DB_ROOT_PASS: "root"
+      CAMERA_HOST: "camera-service"
+      CAMERA_PORT: "50052"
+    restart: always
+    networks:
+      - default
+      - camera_default
+      - trafficstreaming_default
+
+volumes:
+  container-volume:
+
+networks:
+  camera_default:
+    external: true
+  trafficstreaming_default:
+    external: true

@@ -1,4 +1,4 @@
-FROM gcc:5.4
+FROM ubuntu:16.04
 
 RUN apt-get update && \
     apt-get install -y \
@@ -31,8 +31,11 @@ RUN apt-get update && \
             libopencore-amrnb-dev \
             libopencore-amrwb-dev \
             libmysqlcppconn-dev \
+            libmysqlclient-dev \
             libboost-all-dev \
+            libcurl4-openssl-dev \
             x264 v4l-utils
+
 WORKDIR /
 RUN git clone -b $(curl -L https://grpc.io/release) https://github.com/grpc/grpc && \
     cd grpc && \

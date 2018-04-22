@@ -6,6 +6,11 @@ Model::Model(){
 
 }
 
+size_t writeFunction(void *ptr, size_t size, size_t nmemb, std::string* data) {
+    data->append((char*) ptr, size * nmemb);
+    return size * nmemb;
+}
+
 map<int, bool> getAllCameraId() {
     map<int,bool> response;
 	try {
@@ -16,7 +21,7 @@ map<int, bool> getAllCameraId() {
 	  
 		/* Create a connection */
 		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		con = driver->connect("tcp://db-density:3306", "root", "root");
 		/* Connect to the MySQL test database */
 		con->setSchema("density");
 	  
@@ -55,7 +60,7 @@ void storeDensityData(int camera_id, string density_state) {
 	  
 		/* Create a connection */
 		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		con = driver->connect("tcp://db-density:3306", "root", "root");
 		/* Connect to the MySQL  database */
 		con->setSchema("density");
 	  
@@ -107,7 +112,7 @@ string getDensityData(int camera_id) {
 	  
 		/* Create a connection */
 		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		con = driver->connect("tcp://db-density:3306", "root", "root");
 		/* Connect to the MySQL test database */
 		con->setSchema("density");
 	  
@@ -138,6 +143,38 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
 	// Output : Array of Map
     map<string, boost::variant<int, string, map<string, int> > > camera;
     int mask_points_id;
+    string response_string;
+
+    CURL *curl;
+	CURLcode res;
+
+	curl = curl_easy_init();
+	string url = "http://camera-service:50052/camera/";
+	url = url + to_string(id);
+
+	if(curl) {
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		/* example.com is redirected, so we tell libcurl to follow redirection */ 
+		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFunction);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+
+		/* Perform the request, res will get the return code */ 
+		res = curl_easy_perform(curl);
+		/* Check for errors */ 
+		if(res != CURLE_OK)
+		  fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+
+		/* always cleanup */ 
+		curl_easy_cleanup(curl);
+	}
+	auto j = json::parse(response_string);
+
+	if (j["status"] == "success") {
+		string data_detail = j["url"];
+        camera["url"] = data_detail;
+	}
+
 	try {
 		sql::Driver *driver;
 		sql::Connection *con;
@@ -146,23 +183,13 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
 	  
 		/* Create a connection */
 		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+		con = driver->connect("tcp://db-density:3306", "root", "root");
 		/* Connect to the MySQL  database */
-        con->setSchema("camera");
-        
-        stmt = con->createStatement();
-		ostringstream query;
-        query << "SELECT * FROM `camera` WHERE `camera_id` = " << id;
-		res = stmt->executeQuery(query.str());
-		while (res->next()) {
-          /* Access column data by alias or column name */
-          camera["url"] = res->getString("url");
-        }
         // configuration
         con->setSchema("density");
         
         stmt = con->createStatement();
-        query.str("");
+        ostringstream query;
         query << "SELECT * FROM `configuration` WHERE `camera_id` = " << id;
 		res = stmt->executeQuery(query.str());
         while (res->next()) {
@@ -175,7 +202,6 @@ map<string, boost::variant<int, string, map<string, int> > > Model::getCameraCon
             camera["max_thresh"] = res->getInt("max_threshold");
             camera["morph_iteration"] = res->getInt("morph_closing_iteration");
         }
-
         query.str("");
         query << "SELECT * FROM `street_mask_points` WHERE `mask_points_id` = " << mask_points_id;
         res = stmt->executeQuery(query.str());
