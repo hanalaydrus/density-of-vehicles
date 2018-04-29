@@ -2,14 +2,12 @@ version: '3'
 
 services:
   db-density:
-    image: mariadb:10.3
+    image: asia.gcr.io/tugas-akhir-hana/mariadb-density:latest
     container_name: db-density
     volumes:
       - container-volume:/var/lib/mysql
-      - ./mariadb/density.sql:/docker-entrypoint-initdb.d/density.sql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: density
     restart: always
 
   phpmyadmin-density:
