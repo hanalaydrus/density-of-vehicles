@@ -172,7 +172,7 @@ float CalculateDensity(Mat input_image, int real_width, int real_height)
 	int count_white = countNonZero(input_image);
 	// std::cout << endl <<"count white : " << count_white << endl;
 	density = (float) count_white / (float) (real_width*20*real_height*20);
-	std::cout << endl <<"Density : " << density << endl;
+	// std::cout << endl <<"Density : " << density << endl;
 	return density;
 }
 
@@ -238,13 +238,13 @@ float LucasKanade(Mat input_img_gray, Mat prev_img_gray, vector<Point2f> prevPts
 			}
 		}
 		// std::cout << "Total Speed : " << totalSpeed << endl;
-		std::cout << "Count : " << count << endl;
+		// std::cout << "Count : " << count << endl;
 		if (count <= 0){
 			speed = 0;
 		} else {
 			speed = (totalSpeed/(double)count);
 		}
-		std::cout << "Speed : " << speed << endl;
+		// std::cout << "Speed : " << speed << endl;
 		
 		RNG rng(12345);
 		for(size_t i = 0; i < prevPts.size(); i++)
@@ -263,25 +263,25 @@ float LucasKanade(Mat input_img_gray, Mat prev_img_gray, vector<Point2f> prevPts
 	}
 }
 
-String TrafficState(float density, float speed)
+string TrafficState(float density, float speed)
 {	
-	String traffic_state;
+	string traffic_state;
 
 	if (density < 0.5) {
 		// set traffic state
 		traffic_state = "Lancar";
 		// output to console
-		cout << "Lancar" << endl << endl;
+		// cout << "Lancar" << endl << endl;
 	} else if ((density >= 0.5) && (speed > 0.5)){
 		// set traffic state
 		traffic_state = "Ramai Lancar";
 		// output to console
-		cout << "Ramai Lancar" << endl << endl;
+		// cout << "Ramai Lancar" << endl << endl;
 	} else {
 		// set traffic state
 		traffic_state = "Padat";
 		// output to console
-		cout << "Padat" << endl << endl;
+		// cout << "Padat" << endl << endl;
 	}
 	return traffic_state;
 }
@@ -302,8 +302,7 @@ float CountFPS(VideoCapture cap){
 }
 
 void RunService(
-	ServerContext* context,
-	ServerWriter<HelloReply>* writer,
+	int camera_id,
 	string url,
 	int real_width,
 	int real_height,
@@ -318,17 +317,19 @@ void RunService(
 	float fps = 0;
 	int fourcc = 0;
 
+	Model model;
 	Mat inputImg, inputImg_gray, prevImg;
 	vector<Point2f> shi_tomasi_prevPts;
 	float density, speed;
-	String traffic_state;
+	string traffic_state;
+	string prev_traffic_state = "";
 
 	VideoCapture cap(url);
 	if (cap.isOpened()){
 		width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
-		std::cout << "width: " << width << endl;
+		// std::cout << "width: " << width << endl;
 		height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
-		std::cout << "height: " << height << endl;
+		// std::cout << "height: " << height << endl;
 		fps = CountFPS(cap);
 		if (isinf(fps)) {
 			fps = static_cast<int>(cap.get(CAP_PROP_FPS));
@@ -406,15 +407,14 @@ void RunService(
 		// Traffic State
 		traffic_state = TrafficState(density, speed);
 
-		HelloReply r;
-		r.set_response(traffic_state);
-		writer->Write(r);
+		if (traffic_state != prev_traffic_state) {
+			//insert to mysql density history
+			model.storeDensityData(camera_id, traffic_state);
+			prev_traffic_state = traffic_state;
+
+		}
 
 		waitKey(1);
-		
-		if (context->IsCancelled()){
-			break;
-		}
 	}
 }
 
@@ -423,27 +423,19 @@ class GreeterServiceImpl final : public Greeter::Service {
 					const HelloRequest* request,
 					ServerWriter<HelloReply>* writer) override {
 
+		HelloReply r;
 		Model model;
-		map<string, boost::variant<int, string, map<string, int> > > cameraConfig;
-		cameraConfig = model.getCameraConfig(request->id());
-		cout << "Id: " << request->id() << endl;
-		cout << "url: " << boost::get<string>(cameraConfig["url"]) << endl;
-		
-		thread tRunService( 
-			RunService,
-			context,
-			writer,
-			boost::get<string>(cameraConfig["url"]),
-			boost::get<int>(cameraConfig["real_width"]),
-			boost::get<int>(cameraConfig["real_height"]),
-			boost::get< map<string, int> >(cameraConfig["mask_points"]),
-			boost::get<int>(cameraConfig["edge_thresh"]),
-			boost::get<int>(cameraConfig["low_thresh"]),
-			boost::get<int>(cameraConfig["max_thresh"]),
-			boost::get<int>(cameraConfig["morph_iteration"])
-		);
-		
-		tRunService.join();
+		string response;
+
+		while (true) {
+			response = model.getDensityData(request->id());
+			r.set_response(response);
+			writer->Write(r);
+			
+			if (context->IsCancelled()){
+				break;
+			}
+		}
 
 	  	return Status::OK;
 	}
@@ -470,8 +462,32 @@ void RunServer() {
 
 int main(int _argc, char** _argv)
 {
-	
+	Model model;
+	vector< map<string, boost::variant<int, string, map<string, int>>>> cameras;
+	cameras = model.getCameras();
+
+	thread tRunService[cameras.size()];
+
+	for (int i = 0; i < cameras.size(); ++i){
+		tRunService[i] = thread ( 
+			RunService,
+			boost::get<int>(cameras[i]["camera_id"]),
+			boost::get<string>(cameras[i]["url"]),
+			boost::get<int>(cameras[i]["real_width"]),
+			boost::get<int>(cameras[i]["real_height"]),
+			boost::get< map<string, int> >(cameras[i]["mask_points"]),
+			boost::get<int>(cameras[i]["edge_thresh"]),
+			boost::get<int>(cameras[i]["low_thresh"]),
+			boost::get<int>(cameras[i]["max_thresh"]),
+			boost::get<int>(cameras[i]["morph_iteration"])
+		);
+	}
+
 	thread tRunServer(RunServer);
+
+	for (int i = 0; i < cameras.size(); ++i){
+		tRunService[i].join();
+    }
 
 	tRunServer.join();
 
