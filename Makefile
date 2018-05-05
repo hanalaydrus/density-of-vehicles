@@ -6,7 +6,7 @@ build:
 	g++ -std=c++11 `pkg-config --cflags protobuf grpc opencv` -c -o main.o main.cc
 	g++ -std=c++11 `pkg-config --cflags opencv` -c -o IPM.o IPM.cc
 	g++ -std=c++11 -c -o Model.o Model.cc
-	g++ densityContract.pb.o densityContract.grpc.pb.o main.o IPM.o Model.o -lmysqlcppconn -lcurl `pkg-config --libs protobuf grpc++ grpc opencv` -ldl -o main
+	g++ densityContract.pb.o densityContract.grpc.pb.o main.o IPM.o Model.o -o main -lmysqlcppconn -lcurl `pkg-config --libs protobuf grpc++ grpc opencv` -ldl
 
 run:
 	./main

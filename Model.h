@@ -26,10 +26,12 @@ class Model {
 public:
     // function prototypes ////////////////////////////////////////////////////////////////////////
     Model();
-
-    vector< map<string, boost::variant<int, string, map<string, int>>> > getCameras();
+    
+    map<int, bool> getAllCameraId();
     void storeDensityData(int camera_id, string density_state);
     string getDensityData(int camera_id);
+    map<string, boost::variant<int, string, map<string, int> > > getCameraConfig(int id);
+
 };
 
 #endif    // MY_MODEL
