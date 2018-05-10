@@ -45,7 +45,7 @@ services:
     networks:
       - default
       - camera_default
-      - trafficstreaming_default
+      - traffic-streaming_default
 
 volumes:
   container-volume:
@@ -53,5 +53,5 @@ volumes:
 networks:
   camera_default:
     external: true
-  trafficstreaming_default:
+  traffic-streaming_default:
     external: true
