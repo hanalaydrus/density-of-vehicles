@@ -1,13 +1,15 @@
 -- phpMyAdmin SQL Dump
--- version 4.5.4.1deb2ubuntu2
--- http://www.phpmyadmin.net
+-- version 4.8.0
+-- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Mar 25, 2018 at 08:38 PM
--- Server version: 5.7.21-0ubuntu0.16.04.1
--- PHP Version: 7.1.11-1+ubuntu16.04.1+deb.sury.org+1
+-- Generation Time: May 16, 2018 at 09:23 AM
+-- Server version: 5.7.21
+-- PHP Version: 7.1.14
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET AUTOCOMMIT = 0;
+START TRANSACTION;
 SET time_zone = "+00:00";
 
 
@@ -17,7 +19,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `density`
+-- Database: `Density`
 --
 
 -- --------------------------------------------------------
@@ -62,6 +64,19 @@ CREATE TABLE `density_history` (
   `camera_id` int(20) NOT NULL,
   `density_state` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `log`
+--
+
+CREATE TABLE `log` (
+  `id` int(20) NOT NULL,
+  `camera_id` varchar(5) NOT NULL,
+  `time` varchar(20) NOT NULL,
+  `concurrency` int(5) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
 
@@ -111,6 +126,12 @@ ALTER TABLE `density_history`
   ADD PRIMARY KEY (`density_history_id`);
 
 --
+-- Indexes for table `log`
+--
+ALTER TABLE `log`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `street_mask_points`
 --
 ALTER TABLE `street_mask_points`
@@ -125,16 +146,25 @@ ALTER TABLE `street_mask_points`
 --
 ALTER TABLE `configuration`
   MODIFY `config_id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
 --
 -- AUTO_INCREMENT for table `density_history`
 --
 ALTER TABLE `density_history`
   MODIFY `density_history_id` int(255) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `log`
+--
+ALTER TABLE `log`
+  MODIFY `id` int(20) NOT NULL AUTO_INCREMENT;
+
 --
 -- AUTO_INCREMENT for table `street_mask_points`
 --
 ALTER TABLE `street_mask_points`
   MODIFY `mask_points_id` int(10) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
 --
 -- Constraints for dumped tables
 --
@@ -144,6 +174,7 @@ ALTER TABLE `street_mask_points`
 --
 ALTER TABLE `configuration`
   ADD CONSTRAINT `configuration_ibfk_1` FOREIGN KEY (`mask_points_id`) REFERENCES `street_mask_points` (`mask_points_id`);
+COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

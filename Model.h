@@ -30,6 +30,7 @@ public:
     vector< map<string, boost::variant<int, string, map<string, int>>> > getCameras();
     void storeDensityData(int camera_id, string density_state);
     string getDensityData(int camera_id);
+    void logging(vector< vector<boost::variant<int, string>> > log);
 };
 
 #endif    // MY_MODEL
