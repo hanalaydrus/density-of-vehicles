@@ -89,7 +89,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 
         cout << "start process" << endl;
 
-		for (int i = 0; i < 1001; ++i) {
+		for (int i = 0; i < 1000; ++i) {
 			///////////// Logging ///////////////////
             vector<boost::variant<int, string>> logs;
             /////////////////////////////////////////

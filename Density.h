@@ -34,7 +34,7 @@ using densityContract::Greeter;
 class Density {
 public:
 	Density();
-	static void Density::runDensityService(
+	static void runDensityService(
 		int camera_id,
 		string url,
 		int real_width,
