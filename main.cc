@@ -349,7 +349,7 @@ void RunService(
 
 			cap.open(url);
 			if (cap.isOpened()){
-				std::cout << "Opeen " << height << endl;
+				std::cout << "Opeen" << endl;
 				width = static_cast<int>(cap.get(CAP_PROP_FRAME_WIDTH));
 				height = static_cast<int>(cap.get(CAP_PROP_FRAME_HEIGHT));
 				fps = CountFPS(cap);
@@ -426,7 +426,6 @@ class GreeterServiceImpl final : public Greeter::Service {
 		HelloReply r;
 		Model model;
 		string response;
-
 		while (true) {
 			response = model.getDensityData(request->id());
 			r.set_response(response);
