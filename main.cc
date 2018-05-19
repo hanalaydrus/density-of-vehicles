@@ -56,9 +56,9 @@ char genRandom()
 
 int conccurrent = 0;
 
-int printTime(){
+string printTime(){
 	milliseconds ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch());
-    return ms.count();
+    return to_string(ms.count());
 }
 
 ///////////////////////////////////////////////////////////////////
