@@ -12,6 +12,7 @@
 */
 
 #include <grpc++/grpc++.h>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <stdlib.h>
@@ -28,6 +29,7 @@
 #include "Model.h"
 #include "Density.h"
 
+using namespace std::chrono;
 using namespace cv;
 using namespace std;
 using grpc::Server;
@@ -54,12 +56,9 @@ char genRandom()
 
 int conccurrent = 0;
 
-string printTime(){
-    time_t now = time(0);
-    tm *gmtm = gmtime(&now);
-    char* dt = asctime(gmtm);
-
-    return dt;
+int printTime(){
+	milliseconds ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch());
+    return ms.count();
 }
 
 ///////////////////////////////////////////////////////////////////
