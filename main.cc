@@ -110,7 +110,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 		}
 		model.logging(log);
         cout << "Finish check log cc: " << conccurrent << endl;
-        
+        conccurrent--;
 	  	return Status::OK;
 	}
 };
