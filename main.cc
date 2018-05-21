@@ -71,13 +71,9 @@ class GreeterServiceImpl final : public Greeter::Service {
 		////////// Logging /////////////////////////////////////
         vector< vector<boost::variant<int, string>> > log;
 
-        srand(time(0));
+        int camera_id = request->id() % 10;
         string Str = to_string(request->id());
-        for(unsigned int i = 0; i < 3; ++i)
-        {
-            Str += genRandom();
 
-        }
         conccurrent++;
 
         ////////////////////////////////////////////////////////
@@ -92,7 +88,7 @@ class GreeterServiceImpl final : public Greeter::Service {
 			///////////// Logging ///////////////////
             vector<boost::variant<int, string>> logs;
             /////////////////////////////////////////
-			response = model.getDensityData(request->id());
+			response = model.getDensityData(camera_id);
 			r.set_response(response);
 			writer->Write(r);
             /////////////////////////////////////////
