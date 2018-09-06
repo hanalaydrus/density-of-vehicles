@@ -1,0 +1,9 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'asia.gcr.io/$PROJECT_ID/density-service', '.' ]
+images:
+- 'asia.gcr.io/$PROJECT_ID/density-service'
+options:
+    machineType: 'N1_HIGHCPU_8'
+timeout: 6000s
+tags: ['latest']
