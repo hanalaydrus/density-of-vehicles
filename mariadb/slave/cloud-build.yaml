@@ -1,0 +1,7 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '-t', 'asia.gcr.io/$PROJECT_ID/db-density:slave', '.' ]
+images:
+- 'asia.gcr.io/$PROJECT_ID/db-density'
+options:
+    machineType: 'N1_HIGHCPU_8'

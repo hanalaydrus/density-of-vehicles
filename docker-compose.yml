@@ -32,8 +32,8 @@ services:
     external_links:
       - camera-service
       - traffic-streaming-service
-#    ports:
-#      - "50050:50050"
+    ports:
+      - "50050:50050"
     environment:
       DB_HOST: "db-density"
       DB_PORT: "3306"
