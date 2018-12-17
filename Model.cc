@@ -64,7 +64,7 @@ vector< map<string, boost::variant<int, string, map<string, int> > > > Model::ge
 		  
 			/* Create a connection */
 			driver = get_driver_instance();
-			con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+			con = driver->connect("tcp://db-density:3306", "root", "root");
 			/* Connect to the MySQL  database */
 	        // configuration
 	        con->setSchema("density");
@@ -140,7 +140,7 @@ void Model::storeDensityData(int camera_id, string density_state) {
 		  
 			/* Create a connection */
 			driver = get_driver_instance();
-			con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+			con = driver->connect("tcp://db-density:3306", "root", "root");
 			/* Connect to the MySQL  database */
 			con->setSchema("density");
 		  
@@ -196,7 +196,7 @@ string Model::getDensityData(int camera_id) {
 		  
 			/* Create a connection */
 			driver = get_driver_instance();
-			con = driver->connect("tcp://127.0.0.1:3306", "root", "root");
+			con = driver->connect("tcp://db-density:3306", "root", "root");
 			/* Connect to the MySQL test database */
 			con->setSchema("density");
 		  
