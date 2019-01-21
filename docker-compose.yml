@@ -44,14 +44,14 @@ services:
     restart: always
     networks:
       - default
-      - camera_default
+      - camera-service_default
       - traffic-streaming_default
 
 volumes:
   container-volume:
 
 networks:
-  camera_default:
+  camera-service_default:
     external: true
   traffic-streaming_default:
     external: true
